@@ -1,24 +1,97 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as Linking from 'expo-linking';
+import { Stack, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import * as SystemUI from 'expo-system-ui';
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from "react-native";
+import Colors from '../constants/Colors';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const queryClient = new QueryClient();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+// URL'den tokenları ayıkla (Supabase hash/fragment kullanır)
+function parseSupabaseUrl(url: string) {
+  const parts = url.split('#');
+  if (parts.length < 2) return {};
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const hash = parts[parts.length - 1];
+  const params: Record<string, string> = {};
+  hash.split('&').forEach(part => {
+    const [key, value] = part.split('=');
+    if (key && value) params[key] = value;
+  });
+  return params;
+}
+
+// Auth durumunu ve yükleme ekranını yöneten alt bileşen
+function RootContent() {
+  const { loading, user } = useAuth();
+  const router = useRouter();
+  const url = Linking.useURL();
+
+  // Deep Link Dinleyici - E-posta onayı ve Şifre Sıfırlama için
+  useEffect(() => {
+    if (url) {
+      const params = parseSupabaseUrl(url);
+      const { access_token, refresh_token, type } = params;
+
+      if (access_token && refresh_token) {
+        supabase.auth.setSession({
+          access_token: access_token,
+          refresh_token: refresh_token,
+        }).then(({ error }) => {
+          if (!error) {
+            if (type === 'recovery') {
+              router.replace("/(auth)/reset-password");
+            } else {
+              router.replace("/(tabs)");
+            }
+          }
+        });
+      }
+    }
+  }, [url]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+        <ActivityIndicator size="large" color={Colors.correct.main} />
+      </View>
+    );
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <>
+      <StatusBar style="light" translucent={true} backgroundColor="transparent" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      />
+    </>
+  );
+}
+
+import Toast from 'react-native-toast-message';
+import { lexiconToastConfig } from '../components/Common/LexiconToast';
+
+export default function RootLayout() {
+  useEffect(() => {
+    // Kök arka plan rengini ayarla
+    SystemUI.setBackgroundColorAsync(Colors.background);
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootContent />
+      <Toast
+        config={lexiconToastConfig}
+        position="top"
+        topOffset={60}
+      />
+    </QueryClientProvider>
   );
 }

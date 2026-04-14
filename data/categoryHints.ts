@@ -1,0 +1,18 @@
+export const CATEGORY_HINTS: Record<string, string> = {
+  karisik: "Her şeyden bir parça barındıran gizemli bir kelime.",
+  hayvanlar: "Bu kelime, doğanın bir parçası olan canlı bir varlıktır.",
+  meyvesebze: "Tarladan veya bahçeden gelen taze, doğal bir besin.",
+  yiyecekler: "Genellikle mutfakta karşımıza çıkan lezzetli bir şey.",
+  spor: "Fiziksel güç, beceri veya rekabet gerektiren bir aktivite.",
+  sehirler: "Dünya haritasında yer alan önemli bir yerleşim yeri.",
+  meslekler: "Geçimini sağlamak için yapılan uzmanlık gerektiren bir iş.",
+  ulkeler: "Kendi bayrağı ve sınırları olan bağımsız bir toprak parçası.",
+  renkler: "Gözlerimizin algıladığı ışığın farklı titreşimleri.",
+  esyalar: "Günlük hayatta kullandığımız cansız nesnelerden biri.",
+  doga: "Yeşillik, hava, su veya yeryüzü ile ilgili doğal bir unsur.",
+  teknoloji: "Bilimsel verilerin pratik amaçlarla kullanıldığı alan.",
+  muzik: "Ruhun gıdası olan seslerin harmonik bir birleşimi.",
+  tarih: "Geçmişte yaşanmış olaylar ve toplumlara dair bir iz.",
+  giyim: "Vücudumuzu örtmek veya süslenmek için kullandığımız ürünler.",
+  anatomi: "Canlıların yapısını ve organlarını inceleyen bilim dalı.",
+};

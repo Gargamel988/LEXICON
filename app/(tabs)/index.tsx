@@ -1,98 +1,102 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+import DailyCard from '../../components/Home/DailyCard';
+import ModeCard from '../../components/Home/ModeCard';
+import Colors from '../../constants/Colors';
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+type GameMode = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  link: string;
+  badge?: string;
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+const GAME_MODES: GameMode[] = [
+  { id: 'klasik', title: 'Klasik', description: 'Sakin ve zamansız bir deneyim.', icon: 'grid-outline', link: '/game' },
+  { id: 'hizli', title: 'Hızlı', description: 'Zamana karşı kıyasıya rekabet.', icon: 'stopwatch-outline', link: '/blitz' },
+  { id: 'korleme', title: 'Kör Mod', description: 'Hislerine güvenir misin?', icon: 'eye-off-outline', link: '/blind' },
+  { id: 'survival', title: 'Hayatta Kal', description: 'Canların bitene kadar hayatta kal.', icon: 'heart-outline', link: '/survival' },
+  { id: 'coklu', title: 'Çoklu', description: 'Aynı anda birden fazla kelime.', icon: 'layers-outline', link: '/multi' },
+  { id: 'tirma', title: 'Tırmanış', description: 'Zirveye giden yol! Giderek zorlaşan kelimeler.', icon: 'trending-up-outline', link: '/climb' },
+];
+
+export default function HomeScreen() {
+  const router = useRouter();
+
+  const handleModePress = (id: string) => {
+    
+    GAME_MODES.map((mode) => {
+      if (mode.id === id) {
+        router.push(mode.link as any);
+      }
+    })
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={['top']} >
+      {/* CUSTOM HEADER */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+      }}>
+
+
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{
+            color: Colors.correct.main,
+            fontSize: 24,
+            fontWeight: '900',
+            letterSpacing: 2,
+          }}>
+            LEXİCON
+          </Text>
+        </View>
+
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 10 }}
+      >
+        {/* DAILY FEATURE CARD */}
+        <DailyCard />
+
+        {/* GAME MODES SECTION */}
+        <View style={{ paddingHorizontal: 20, marginTop: 40 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800' }}>Oyun Modları</Text>
+            <Pressable>
+              <Text style={{ color: Colors.textSecondary, fontSize: 14, fontWeight: '600' }}>Tümünü Gör</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            {GAME_MODES.map((mode) => (
+              <ModeCard
+                key={mode.id}
+                title={mode.title}
+                description={mode.description}
+                icon={mode.icon as keyof typeof Ionicons.glyphMap}
+                badge={mode.badge}
+                onPress={() => handleModePress(mode.id)}
+              />
+            ))}
+          </View>
+        </View>
+
+
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
