@@ -1,17 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
 
 interface PodiumItemProps {
   rank: 1 | 2 | 3;
+  actualRank?: number;
   username: string;
   score: string;
   avatar_url?: string;
   accentColor?: string;
+  isCurrentUser?: boolean;
+  onPress?: () => void;
 }
 
-export const PodiumItem = ({ rank, username, score, avatar_url, accentColor = '#4CAF50' }: PodiumItemProps) => {
+export const PodiumItem = ({ rank, actualRank, username, score, avatar_url, accentColor = '#4CAF50', isCurrentUser, onPress }: PodiumItemProps) => {
   const { moderateScale, spacing } = useResponsive();
 
   const isFirst = rank === 1;
@@ -20,7 +23,11 @@ export const PodiumItem = ({ rank, username, score, avatar_url, accentColor = '#
   const marginTop = isFirst ? 0 : moderateScale(40);
 
   return (
-    <View style={{ alignItems: 'center', marginTop }}>
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={{ alignItems: 'center', marginTop }}
+    >
       <View style={{ position: 'relative' }}>
         {/* Avatar Circle */}
         <View style={{
@@ -33,17 +40,16 @@ export const PodiumItem = ({ rank, username, score, avatar_url, accentColor = '#
           backgroundColor: 'rgba(255,255,255,0.05)',
           justifyContent: 'center',
           alignItems: 'center',
-          shadowColor: rankColor,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.5,
-          shadowRadius: 10,
-          elevation: 10,
         }}>
           {avatar_url ? (
-            <Image
-              source={{ uri: avatar_url }}
-              style={{ width: '100%', height: '100%', borderRadius: size / 2 }}
-            />
+            avatar_url.startsWith('http') ? (
+              <Image
+                source={{ uri: avatar_url }}
+                style={{ width: '100%', height: '100%', borderRadius: size / 2 }}
+              />
+            ) : (
+              <Text style={{ fontSize: size * 0.5 }}>{avatar_url}</Text>
+            )
           ) : (
             <Ionicons name="person" size={size * 0.5} color="#555" />
           )}
@@ -63,11 +69,11 @@ export const PodiumItem = ({ rank, username, score, avatar_url, accentColor = '#
           borderWidth: 2,
           borderColor: '#000',
         }}>
-          <Text style={{ color: '#000', fontWeight: '900', fontSize: moderateScale(14) }}>{rank}</Text>
+          <Text style={{ color: '#000', fontWeight: '900', fontSize: moderateScale(14) }}>{actualRank || rank}</Text>
         </View>
 
-        {/* First Rank Crown */}
-        {isFirst && (
+        {/* First Rank Crown (if actually rank 1) */}
+        {(actualRank === 1 || (!actualRank && isFirst)) && (
           <View style={{ position: 'absolute', top: -moderateScale(15), alignSelf: 'center' }}>
             <Ionicons name="star" size={moderateScale(24)} color="#FFD700" />
           </View>
@@ -75,13 +81,13 @@ export const PodiumItem = ({ rank, username, score, avatar_url, accentColor = '#
       </View>
 
       <View style={{ marginTop: spacing.md, alignItems: 'center' }}>
-        <Text style={{ color: '#fff', fontSize: moderateScale(14), fontWeight: '800', textAlign: 'center', width: moderateScale(80) }} numberOfLines={1}>
+        <Text style={{ color: isCurrentUser ? accentColor : '#fff', fontSize: moderateScale(14), fontWeight: isCurrentUser ? '900' : '800', textAlign: 'center', width: moderateScale(80) }} numberOfLines={1}>
           {username}
         </Text>
         <Text style={{ color: accentColor, fontSize: moderateScale(12), fontWeight: '900', marginTop: 2 }}>
           {score}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };

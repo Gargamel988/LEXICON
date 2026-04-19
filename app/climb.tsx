@@ -2,7 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import GameHeader from '@/components/Game/GameHeader';
@@ -19,10 +20,11 @@ import { useWordGame } from '@/hooks/useWordGame';
 import { statsService } from '@/services/statsService';
 import { getWordByCategory } from '@/services/wordService';
 import { FadeInDown } from 'react-native-reanimated';
+import Colors from '../constants/Colors';
 
 
-const CLIMB_ACCENT = '#CF4C13'; // Orange theme as requested
-const CLIMB_BG = '#0a0a0a';
+const CLIMB_ACCENT = Colors.modes.climb.accent;
+const CLIMB_BG = Colors.modes.climb.background;
 
 const getRoundConfig = (round: number) => {
     const cycle = Math.floor((round - 1) / 12) + 1;
@@ -77,23 +79,27 @@ export default function ClimbGameScreen() {
     const [revealedWord, setRevealedWord] = useState<string | null>(null);
     const [noticeContent, setNoticeContent] = useState<string | null>(null);
     const [isTimerPaused, setIsTimerPaused] = useState(false);
+    const [totalStartTime, setTotalStartTime] = useState<number | null>(null);
+    const [isSessionFairPlay, setIsSessionFairPlay] = useState(true);
+    const [sessionBackgroundStats, setSessionBackgroundStats] = useState({ count: 0, totalTime: 0 });
 
-    const { configs: powerUpConfigs } = usePowerUps(['time', 'hint', 'freeze', 'extra', 'skip'], {
-        time: { count: 1 },
-        hint: { count: 1 },
-        freeze: { count: 1 },
-        extra: { count: 1 },
+    const { configs: powerUpConfigs, resetPowerUps } = usePowerUps(['time', 'hint', 'freeze', 'extra', 'skip'], {
+        time: { count: 3 },
+        hint: { count: 2 },
+        freeze: { count: 2 },
+        extra: { count: 2 },
         skip: { count: 1 }
     }, (key) => {
-        if (key === 'time') handleAddTime();
-        if (key === 'hint') handleHint();
-        if (key === 'freeze') handleFreeze();
-        if (key === 'extra') handleExtraAttempt();
-        if (key === 'skip') handleSkip();
+        if (key === 'time') return handleAddTime();
+        if (key === 'hint') return handleHint();
+        if (key === 'freeze') return handleFreeze();
+        if (key === 'extra') return handleExtraAttempt();
+        if (key === 'skip') return handleSkip();
     });
 
     const timerProgress = useSharedValue(1);
     const timerInterval = useRef<any>(null);
+    const isTimerPausedRef = useRef(false);
 
     const lastWordRef = useRef('');
     const scoreRef = useRef(0);
@@ -105,12 +111,17 @@ export default function ClimbGameScreen() {
     useEffect(() => { selectedCategoryRef.current = selectedCategory; }, [selectedCategory]);
 
     const saveResultMutation = useMutation({
-        mutationFn: (data: any) => {
-            console.log("[CLIMB] Saving result:", data);
-            return statsService.saveGameResult(user!.id, data);
-        },
+        mutationFn: (data: any) => statsService.saveGameResult(user!.id, data),
         onSuccess: (res) => {
-            console.log("[CLIMB] Result saved:", res);
+            if (res && !res.success && res.reason === 'fair_play_violation') {
+                Toast.show({
+                    type: 'info',
+                    text1: 'Adil Oyun Uyarısı',
+                    text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+                    position: 'top',
+                    visibilityTime: 4000
+                });
+            }
             queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
         },
     });
@@ -133,6 +144,7 @@ export default function ClimbGameScreen() {
         gameReset(config.maxAttempts, word.length);
         setGameId(prev => prev + 1);
         setIsTimerPaused(false);
+        isTimerPausedRef.current = false;
         setNoticeContent(null);
     }, []);
 
@@ -148,8 +160,9 @@ export default function ClimbGameScreen() {
                 is_winner: false,
                 score: scoreRef.current,
                 attempts: currentRoundRef.current,
-                duration_seconds: 0, // Placeholder
+                duration_seconds: totalStartTime ? Math.floor((Date.now() - totalStartTime) / 1000) : 0,
                 category: selectedCategoryRef.current,
+                is_fair_play: isSessionFairPlay
             });
         }
     }, [isGameOver, user]);
@@ -170,7 +183,16 @@ export default function ClimbGameScreen() {
         onScoreUpdate: (points) => {
             setScore(prev => prev + points);
         },
-        onSuccess: (points) => {
+        onSuccess: (points, attempts, fairPlayData) => {
+            // Track Fair Play
+            if (fairPlayData) {
+                if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+                setSessionBackgroundStats(prev => ({
+                    count: prev.count + fairPlayData.backgroundCount,
+                    totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+                }));
+            }
+
             const config = getRoundConfig(currentRoundRef.current);
 
             const timeBonus = timeLeft * config.multiplier;
@@ -193,7 +215,16 @@ export default function ClimbGameScreen() {
                 startTimer(nextConfig.timeLimit);
             }, 600);
         },
-        onFail: () => {
+        onFail: (attempts, fairPlayData) => {
+            // Track Fair Play
+            if (fairPlayData) {
+                if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+                setSessionBackgroundStats(prev => ({
+                    count: prev.count + fairPlayData.backgroundCount,
+                    totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+                }));
+            }
+
             if (timerInterval.current) clearInterval(timerInterval.current);
             setRevealedWord(currentWord);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -208,9 +239,11 @@ export default function ClimbGameScreen() {
         setSelectedCategory(category);
         setIsReady(true);
         setCurrentRound(1);
+        resetPowerUps({ time: { count: 3 }, hint: { count: 2 }, freeze: { count: 2 }, extra: { count: 2 }, skip: { count: 2 } });
         const config = getRoundConfig(1);
         startNextWord(category, 1);
         startTimer(config.timeLimit);
+        setTotalStartTime(Date.now());
     };
 
     const startTimer = (limitSeconds: number) => {
@@ -219,7 +252,7 @@ export default function ClimbGameScreen() {
         timerProgress.value = 1;
 
         timerInterval.current = setInterval(() => {
-            if (isTimerPaused) return; // Freeze logic
+            if (isTimerPausedRef.current) return; // Freeze logic using ref to bypass closure
 
             setTimeLeft(prev => {
                 if (prev <= 1) {
@@ -246,9 +279,13 @@ export default function ClimbGameScreen() {
         setScore(0);
         setCurrentRound(1);
         setIsGameOver(false);
+        resetPowerUps({ time: { count: 3 }, hint: { count: 2 }, freeze: { count: 2 }, extra: { count: 2 }, skip: { count: 2 } });
         setIsReady(false);
         setIsTimerPaused(false);
+        isTimerPausedRef.current = false;
         setNoticeContent(null);
+        setIsSessionFairPlay(true);
+        setSessionBackgroundStats({ count: 0, totalTime: 0 });
     };
 
     // Power-up Handlers
@@ -261,34 +298,48 @@ export default function ClimbGameScreen() {
         timerProgress.value = withTiming(0, { duration: newDuration, easing: Easing.linear });
 
         setTimeout(() => setNoticeContent(null), 2000);
+        return true;
     };
 
     const handleHint = () => {
-        getHint();
+        const success = getHint();
+        if (success === false) return false;
         setNoticeContent("İPUCU VERİLDİ!");
         setTimeout(() => setNoticeContent(null), 2000);
+        return true;
     };
 
     const handleFreeze = () => {
-        setIsTimerPaused(true);
-        setNoticeContent("ZAMAN DONDURULDU! (5s)");
+        if (isReady && !isGameOver && !isTimerPausedRef.current) {
+            setIsTimerPaused(true);
+            isTimerPausedRef.current = true;
+            setNoticeContent("ZAMAN DONDURULDU! (5s)");
 
-        // Pause animation
-        const currentVal = timerProgress.value;
-        timerProgress.value = currentVal;
+            // Pause animation
+            const currentVal = timerProgress.value;
+            timerProgress.value = currentVal;
 
-        setTimeout(() => {
-            setIsTimerPaused(false);
-            setNoticeContent(null);
-            // Resume animation
-            timerProgress.value = withTiming(0, { duration: timeLeft * 1000, easing: Easing.linear });
-        }, 5000);
+            setTimeout(() => {
+                setIsTimerPaused(false);
+                isTimerPausedRef.current = false;
+                setNoticeContent(null);
+                // Resume animation with remaining time
+                timerProgress.value = withTiming(0, {
+                    duration: timeLeft * 1000,
+                    easing: Easing.linear
+                });
+            }, 5000);
+
+            return true;
+        }
+        return false;
     };
 
     const handleExtraAttempt = () => {
         addExtraAttempt();
         setNoticeContent("+1 DENEME HAKKI!");
         setTimeout(() => setNoticeContent(null), 2000);
+        return true;
     };
 
     const handleSkip = () => {
@@ -303,6 +354,7 @@ export default function ClimbGameScreen() {
             startNextWord(undefined, nextRound);
             startTimer(nextConfig.timeLimit);
         }, 500);
+        return true;
     };
 
     // Local configs moved to usePowerUps
@@ -333,8 +385,8 @@ export default function ClimbGameScreen() {
                 leftStats={{
                     label: 'Süre',
                     value: `${timeLeft}s`,
-                    color: timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT,
-                    glowColor: `${timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT}66`,
+                    color: isTimerPaused ? '#4FC3F7' : (timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT),
+                    glowColor: `${isTimerPaused ? '#4FC3F7' : (timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT)}66`,
                 }}
                 rightStats={{ label: 'Skor', value: score, color: '#ffffff' }}
                 onBack={() => router.back()}
@@ -355,7 +407,7 @@ export default function ClimbGameScreen() {
                         {
                             height: '100%',
                             borderRadius: 3,
-                            backgroundColor: timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT,
+                            backgroundColor: isTimerPaused ? '#4FC3F7' : (timeLeft < 10 ? '#ff4d4d' : CLIMB_ACCENT),
                         },
                         progressStyle
                     ]} />
@@ -426,6 +478,8 @@ export default function ClimbGameScreen() {
                 word={currentWord}
                 guesses={score}
                 extraData={currentRound}
+                isFairPlay={isSessionFairPlay}
+                backgroundStats={sessionBackgroundStats}
                 onRestart={resetTimedGame}
                 onHome={() => router.replace('/')}
                 mode="climb"

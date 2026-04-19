@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "Game",
+    "name": "lexicon",
     "slug": "Game",
     "version": "1.0.0",
+
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "game",
+    "scheme": "lexicon",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0f0f0f",
     "newArchEnabled": true,
@@ -15,10 +16,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0f0f0f",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#1a1b2e"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -29,8 +27,7 @@
       }
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router",
@@ -40,9 +37,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0f0f0f",
+          "backgroundColor": "#0a0a0f",
           "dark": {
-            "backgroundColor": "#0f0f0f"
+            "backgroundColor": "#0a0a0f"
           }
         }
       ],

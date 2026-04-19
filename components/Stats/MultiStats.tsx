@@ -32,92 +32,105 @@ export default function MultiStats({ accent, data }: Props) {
 
   if (!data) return null;
 
+  const { advancedMulti } = data;
+
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: 20 }}>
       {/* Mod başlığı */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: '#fff', fontSize: moderateScale(22), fontWeight: '900', letterSpacing: 0.5 }}>Çoklu Mod</Text>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(8), fontWeight: '900', letterSpacing: 1 }}>STRATEGIC_PROCESS_X</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
+        <View>
+          <Text style={{ color: '#fff', fontSize: moderateScale(24), fontWeight: '900', letterSpacing: 0.5 }}>Çoklu</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(10), fontWeight: '700', marginTop: 2 }}>PARALEL İŞLEMCİ MERKEZİ</Text>
+        </View>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+          <Text style={{ color: accent, fontSize: moderateScale(10), fontWeight: '900' }}>HYPER_THREADING_ON</Text>
         </View>
       </View>
 
-      {/* 2x2 Stat Matrisi */}
-      <View style={{ gap: wp(2.5) }}>
-        <View style={{ flexDirection: 'row', gap: wp(2.5) }}>
-          <StatCard 
-            label="Kazanma Oranı" 
-            value={`%${data.winRate}`} 
-            accent="#4ade80"
-            icon="checkmark-circle"
-            sub="Başarı yüzdesi"
-          />
-          <StatCard 
-            label="Ortalama Deneme" 
-            value={data.avgAttempts || 0} 
-            accent={accent}
-            icon="list"
-            sub="Tahmin yoğunluğu"
-          />
-        </View>
-        <View style={{ flexDirection: 'row', gap: wp(2.5) }}>
-          <StatCard 
-            label="En Yüksek Puan" 
-            value={(data.highScore || 0).toLocaleString('tr-TR')} 
-            accent={accent}
-            icon="trophy"
-            sub="Rekor skor"
-          />
-          <StatCard 
-            label="Toplam Oyun" 
-            value={data.totalGames.toString()} 
+      {/* Performans Matrisi (3 Satır) */}
+      <View style={{ gap: wp(3) }}>
+        <View style={{ flexDirection: 'row', gap: wp(3) }}>
+          <StatCard
+            label="ODAK SKORU"
+            value={`${advancedMulti?.multiTaskScore || 0}%`}
             accent={accent}
             icon="layers"
-            sub="Multi deneyimi"
+            info="Aynı anda birden fazla kelimeye odaklanma ve bitirme başarısı."
+          />
+          <StatCard
+            label="SENKRONİZASYON"
+            value={`${advancedMulti?.syncScore || 0}%`}
+            accent="#4ade80"
+            icon="git-merge"
+            info="Kelimeleri birbirine ne kadar yakın zamanlarda çözdüğünüzü ölçen uyum puanı."
+          />
+        </View>
+        <View style={{ flexDirection: 'row', gap: wp(3) }}>
+          <StatCard
+            label="SET SÜRESİ"
+            value={`${advancedMulti?.avgSetTime || 0}s`}
+            accent="#fbbf24"
+            icon="time"
+            info="Tüm kelimeleri (örneğin 4'lü set) bitirme sürenin ortalaması."
+          />
+          <StatCard
+            label="PARALEL HIZ"
+            value={`${advancedMulti?.parallelEfficiency || 0}s/k`}
+            accent="#818cf8"
+            icon="flash"
+            info="Çoklu modda kelime başına düşen ortalama süre verimliliği."
+          />
+        </View>
+        <View style={{ flexDirection: 'row', gap: wp(3) }}>
+          <StatCard
+            label="TAMAMLANAN SET"
+            value={advancedMulti?.totalSetsCompleted || 0}
+            accent="#f87171"
+            icon="documents"
+            info="Başarıyla tamamlanan toplam çoklu kelime seansı."
+          />
+          <StatCard
+            label="WIN RATE"
+            value={`${data.winRate || 0}%`}
+            accent="rgba(255,255,255,0.4)"
+            icon="checkmark-circle"
+            info="Tüm seanslar içindeki genel başarı oranını gösterir."
           />
         </View>
       </View>
 
-      {/* Son 5 oyun */}
+      {/* Akış Grafiği */}
       <View style={{
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: 'rgba(255,255,255,0.03)',
         borderRadius: 24,
         padding: moderateScale(20),
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.06)',
       }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <SectionLabel>Stratejik Geçmiş</SectionLabel>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
-            <Text style={{ color: accent, fontSize: moderateScale(10), fontWeight: '700' }}>Skor Trendi</Text>
-          </View>
-        </View>
+        <SectionLabel>Odak Kanalları Trendi</SectionLabel>
         <MiniBarChart scores={data.lastScores || []} accent={accent} />
+        <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(9), textAlign: 'center', marginTop: 12 }}>
+          Son 5 çoklu oyun setindeki performans değişimi.
+        </Text>
       </View>
 
-      {/* Zihinsel Çeviklik */}
+      {/* Hero Kartı */}
       <View style={{
         backgroundColor: 'rgba(255,255,255,0.04)',
         borderRadius: 24,
-        padding: moderateScale(20),
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        padding: moderateScale(24),
         borderWidth: 1,
         borderColor: `${accent}30`,
         overflow: 'hidden',
       }}>
-        <View style={{ flex: 1, zIndex: 1 }}>
-          <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(9), fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase' }}>Zihinsel Çeviklik</Text>
-          <Text style={{ color: '#fff', fontSize: moderateScale(24), fontWeight: '900', marginTop: 8 }}>ÇOK YÖNLÜ</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(11), marginTop: 6, fontWeight: '600', lineHeight: 16 }}>
-            Aynı anda <Text style={{ color: accent }}>4 farklı</Text> odağı yönetebilme yeteneğin gelişmiş. Stratejik derinliğin seni öne çıkarıyor.
-          </Text>
-        </View>
-        <View style={{ position: 'absolute', right: -15, bottom: -15, opacity: 0.1 }}>
-          <Ionicons name="apps" size={moderateScale(120)} color={accent} />
-        </View>
+        <Ionicons name="apps" size={moderateScale(120)} color={`${accent}05`} style={{ position: 'absolute', right: -20, bottom: -30 }} />
+        <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: moderateScale(9), fontWeight: '800', letterSpacing: 2 }}>ZİHİNSEL İŞLEMCİ</Text>
+        <Text style={{ color: '#fff', fontSize: moderateScale(24), fontWeight: '900', marginTop: 4 }}>
+          {(advancedMulti?.multiTaskScore || 0) > 80 ? 'MULTI-CORE PRO' : 'SINGLE-CORE EXPERT'}
+        </Text>
+        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(11), marginTop: 8, fontWeight: '600', lineHeight: 18, zIndex: 1 }}>
+          Aynı anda <Text style={{ color: accent, fontWeight: '900' }}>{advancedMulti?.parallelEfficiency || 0}s</Text> verimlilikle kelimeleri dize getiriyorsun.
+        </Text>
       </View>
     </View>
   );

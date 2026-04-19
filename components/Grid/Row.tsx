@@ -1,10 +1,10 @@
 import React from 'react';
 import { View } from 'react-native';
-import { CellData } from '../../types';
+import { CellData, Row as RowType } from '../../types';
 import Cell from './Cell';
 
 interface RowProps {
-  row: CellData[];
+  rowData: RowType;
   rowIndex: number;
   currentRow: number;
   currentGuess: string;
@@ -15,7 +15,7 @@ interface RowProps {
 }
 
 const Row: React.FC<RowProps> = React.memo(({ 
-  row, 
+  rowData, 
   rowIndex, 
   currentRow, 
   currentGuess, 
@@ -25,10 +25,11 @@ const Row: React.FC<RowProps> = React.memo(({
   isBlind 
 }) => {
   const isCurrentRow = rowIndex === currentRow;
+  const { cells } = rowData;
 
   return (
     <View style={{ flexDirection: 'row', gap, justifyContent: 'center', width: '100%' }}>
-      {row && row.map((cell, cellIndex) => {
+      {cells && cells.map((cell, cellIndex) => {
         // If it's the current row AND the cell is empty (waiting for guess), 
         // show the character from currentGuess. Otherwise show cell.char.
         const char = (isCurrentRow && cell.status === 'empty') ? currentGuess[cellIndex] : cell.char;
@@ -51,8 +52,7 @@ const Row: React.FC<RowProps> = React.memo(({
   // Optimization: Only re-render if:
   // 1. It's the current row and the guess changed
   // 2. The currentRow indicator moved to/from this row
-  // 3. The row data itself changed (e.g. after submission)
-  // 4. Other layout props changed
+  // 3. The row data itself changed (e.g. after submission or ID refresh)
   
   const wasActive = prevProps.rowIndex === prevProps.currentRow;
   const isActive = nextProps.rowIndex === nextProps.currentRow;
@@ -62,7 +62,8 @@ const Row: React.FC<RowProps> = React.memo(({
     if (prevProps.currentRow !== nextProps.currentRow) return false;
   }
   
-  if (prevProps.row !== nextProps.row) return false;
+  // Checking rowData reference is efficient because we create a new object+ID on change
+  if (prevProps.rowData !== nextProps.rowData) return false;
   if (prevProps.cellWidth !== nextProps.cellWidth) return false;
   if (prevProps.isBlind !== nextProps.isBlind) return false;
 

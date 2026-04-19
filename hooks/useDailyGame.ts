@@ -63,10 +63,12 @@ export const useDailyGame = () => {
       attempts,
       duration,
       isWinner,
+      is_fair_play,
     }: {
       attempts: number;
       duration: number;
       isWinner: boolean;
+      is_fair_play?: boolean;
     }) => {
       if (!user) throw new Error("Oturum açılmamış.");
       return statsService.saveGameResult(user.id, {
@@ -74,6 +76,7 @@ export const useDailyGame = () => {
         attempts,
         duration_seconds: duration,
         is_winner: isWinner,
+        is_fair_play,
       });
     },
     onSuccess: () => {

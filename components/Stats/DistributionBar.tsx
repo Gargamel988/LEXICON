@@ -18,7 +18,7 @@ export default function DistributionBar({ dist, accent }: Props) {
         const isHighest = count === max;
 
         return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Text style={{
               color: 'rgba(255,255,255,0.4)',
               fontSize: moderateScale(11),

@@ -17,9 +17,11 @@ interface ResultModalProps {
   onRestart: () => void;
   onHome: () => void;
   onNewGame?: () => void;
-  mode?: 'classic' | 'timed' | 'multi' | 'blind' | 'survival' | 'climb';
-  extraData?: string | number; // Blitz için kelime sayısı, Multi için solved/total
+  mode?: 'classic' | 'timed' | 'multi' | 'blind' | 'survival' | 'climb' | 'blitz' | 'battle' | 'bomb';
+  extraData?: string | number; // Blitz için kelime sayısı, Multi için solved/total, Battle için Rakip Adı
   allGrids?: CellData[][][]; // Multi-Mode grids for emoji share
+  isFairPlay?: boolean;
+  backgroundStats?: { count: number; totalTime: number };
 }
 
 const { height } = Dimensions.get('window');
@@ -34,7 +36,9 @@ const ResultModal: React.FC<ResultModalProps> = ({
   onNewGame,
   mode = 'classic',
   extraData,
-  allGrids
+  allGrids,
+  isFairPlay = true,
+  backgroundStats
 }) => {
   const isWin = status === 'win';
   const isMulti = mode === 'multi';
@@ -47,6 +51,8 @@ const ResultModal: React.FC<ResultModalProps> = ({
   const CLIMB_ACCENT = '#CF4C13';
   const SURVIVAL_ACCENT = '#ff3b30';
   const MULTI_ACCENT = '#9c27b0';
+  const BATTLE_ACCENT = '#FF0055'; // Neon Rose
+  const BOMB_ACCENT = '#FF5722'; // Orange-Red
   const WIN_COLOR = '#6aaa64';
   const LOSE_COLOR = '#ff4d4d';
 
@@ -74,14 +80,19 @@ const ResultModal: React.FC<ResultModalProps> = ({
     if (isMulti) modeName = 'Çoklu Mod';
     else if (mode === 'survival') modeName = 'Can Modu';
     else if (isClimb) modeName = 'Tırmanma Modu';
+    else if (mode === 'bomb') modeName = 'Bomba Kimde?';
 
     let message = `Lexicon ${modeName}\n`;
+    if (mode === 'bomb') {
+      message += isWin ? "✅ Hayatta kaldım!\n" : "💥 Bomba bende patladı!\n";
+    }
     message += `Skor: ${guesses}\n`;
 
     if (extraData) {
       if (isMulti) message += `İlerleme: ${extraData}\n`;
       else if (mode === 'survival') message += `Bilinen: ${extraData}\n`;
       else if (isClimb) message += `Ulaşılan Tur: ${extraData}\n`;
+      else if (mode === 'bomb') message += `Durum: ${extraData}\n`;
     }
     message += `Kelimeler: ${word}\n\n`;
 
@@ -105,6 +116,9 @@ const ResultModal: React.FC<ResultModalProps> = ({
       });
     }
 
+    if (!isFairPlay) {
+      message += `⚠️ Bu skor yardımcı araçlarla alınmış olabilir.\n`;
+    }
     message += `https://lexicon.game`;
 
     try {
@@ -124,7 +138,11 @@ const ResultModal: React.FC<ResultModalProps> = ({
 
   if (!shouldRender && !isVisible) return null;
 
-  const accentColor = mode === 'survival' ? SURVIVAL_ACCENT : (isMulti ? MULTI_ACCENT : (isClimb ? CLIMB_ACCENT : (isWin ? WIN_COLOR : LOSE_COLOR)));
+  const accentColor = mode === 'bomb' ? BOMB_ACCENT :
+                     (mode === 'survival' ? SURVIVAL_ACCENT : 
+                     (isMulti ? MULTI_ACCENT : 
+                     (mode === 'battle' ? BATTLE_ACCENT :
+                     (isClimb ? CLIMB_ACCENT : (isWin ? WIN_COLOR : LOSE_COLOR)))));
 
   return (
     <View style={{
@@ -169,7 +187,7 @@ const ResultModal: React.FC<ResultModalProps> = ({
         cardStyle
       ]}>
         <Ionicons
-          name={isWin ? "trophy" : "close-circle"}
+          name={mode === 'bomb' ? (isWin ? "shield-checkmark" : "flame") : (isWin ? "trophy" : "close-circle")}
           size={70}
           color={accentColor}
         />
@@ -182,7 +200,12 @@ const ResultModal: React.FC<ResultModalProps> = ({
           textAlign: 'center',
           letterSpacing: 1
         }}>
-          {mode === 'survival' ? "HAYATTA KALAMADIN!" : (isClimb ? "OYUN BİTTİ!" : (isTimed ? "SÜRE DOLDU!" : (isWin ? "TEBRİKLER!" : "BİTMEDİ!")))}
+          {mode === 'battle' ? (isWin ? "SAVAŞI KAZANDIN!" : "SAVAŞ KAYBEDİLDİ!") : 
+           mode === 'survival' ? "HAYATTA KALAMADIN!" : 
+           isClimb ? "OYUN BİTTİ!" : 
+           isTimed ? "SÜRE DOLDU!" : 
+           mode === 'bomb' ? (isWin ? "SAVAŞI KAZANDIN!" : "BOMBA PATLADI!") :
+           (isWin ? "TEBRİKLER!" : "BİTMEDİ!")}
         </Text>
 
         <View style={{ marginTop: 10, alignItems: 'center', gap: 4 }}>
@@ -197,7 +220,9 @@ const ResultModal: React.FC<ResultModalProps> = ({
             </>
           ) : (
             <Text style={{ color: '#818384', fontSize: 16, fontWeight: '600', textAlign: 'center' }}>
-              {isWin ? "Sözlüğün ustası yola devam ediyor." : "Maalesef tüm kelimeleri bulamadın."}
+              {mode === 'battle' ? (isWin ? `${extraData} karşısında zafer kazandın!` : `${extraData} bu turu senden önce bitirdi.`) :
+               mode === 'bomb' ? (isWin ? "Rakibi patlatarak hayatta kalmayı başardın!" : "Süre bitti ve bomba sende patladı...") :
+               isWin ? "Sözlüğün ustası yola devam ediyor." : "Maalesef tüm kelimeleri bulamadın."}
               {isMulti && ` (${extraData})`}
             </Text>
           )}
@@ -235,6 +260,32 @@ const ResultModal: React.FC<ResultModalProps> = ({
               {guesses <= 2 ? "DÂHİCE!" : guesses <= 4 ? "HARİKA!" : "İYİ İŞ!"}
             </Text>
           </View>
+        )}
+
+        {/* Fair Play Status Badge */}
+        {!isFairPlay && (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255, 149, 0, 0.15)',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 10,
+            marginTop: 15,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 149, 0, 0.3)'
+          }}>
+            <Ionicons name="warning-outline" size={14} color="#ff9500" />
+            <Text style={{ color: '#ff9500', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>
+              RESMİ OLMAYAN SKOR
+            </Text>
+          </View>
+        )}
+        {backgroundStats && backgroundStats.count > 0 && (
+          <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 5 }}>
+            Uygulama Geçişi: {backgroundStats.count} | Süre: {backgroundStats.totalTime}s
+          </Text>
         )}
 
         <View style={{ width: '100%', marginTop: 25, gap: 10 }}>

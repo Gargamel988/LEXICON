@@ -5,7 +5,7 @@ export const INITIAL_GRID = Array(6)
 export const KEYBOARD_LAYOUTS = [
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "Ğ", "Ü"],
   ["A", "S", "D", "F", "G", "H", "J", "K", "L", "Ş", "İ"],
-  ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "Ö", "Ç", "⌫"],
+  ["Z", "X", "C", "V", "B", "N", "M", "Ö", "Ç", "⌫", "ENTER"],
 ];
 
 // Default layout for legacy components

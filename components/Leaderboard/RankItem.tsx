@@ -1,5 +1,4 @@
-import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useResponsive } from '../../hooks/useResponsive';
 
@@ -10,22 +9,35 @@ interface RankItemProps {
   avatar_url?: string;
   isCurrentUser?: boolean;
   accentColor?: string;
+  onPress?: () => void;
 }
 
-export const RankItem = ({ rank, username, score, avatar_url, isCurrentUser, accentColor = '#4CAF50' }: RankItemProps) => {
+export const RankItem = ({ 
+  rank, 
+  username, 
+  score, 
+  avatar_url, 
+  isCurrentUser, 
+  accentColor = '#4CAF50',
+  onPress
+}: RankItemProps) => {
   const { wp, moderateScale, spacing } = useResponsive();
 
   return (
-    <View style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: spacing.md,
-      backgroundColor: isCurrentUser ? `${accentColor}1A` : 'rgba(255,255,255,0.03)',
-      borderRadius: moderateScale(16),
-      marginBottom: spacing.sm,
-      borderWidth: 1,
-      borderColor: isCurrentUser ? `${accentColor}4D` : 'rgba(255,255,255,0.05)',
-    }}>
+    <TouchableOpacity 
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.md,
+        backgroundColor: isCurrentUser ? `${accentColor}1A` : 'rgba(255,255,255,0.03)',
+        borderRadius: moderateScale(16),
+        marginBottom: spacing.sm,
+        borderWidth: 1,
+        borderColor: isCurrentUser ? `${accentColor}4D` : 'rgba(255,255,255,0.05)',
+      }}
+    >
       {/* Rank Number */}
       <Text style={{
         color: isCurrentUser ? accentColor : '#666',
@@ -45,9 +57,15 @@ export const RankItem = ({ rank, username, score, avatar_url, isCurrentUser, acc
         backgroundColor: 'rgba(255,255,255,0.1)',
         overflow: 'hidden',
         marginHorizontal: spacing.sm,
+        justifyContent: 'center',
+        alignItems: 'center'
       }}>
         {avatar_url ? (
-          <Image source={{ uri: avatar_url }} style={{ width: '100%', height: '100%' }} />
+          avatar_url.startsWith('http') ? (
+            <Image source={{ uri: avatar_url }} style={{ width: '100%', height: '100%' }} />
+          ) : (
+            <Text style={{ fontSize: moderateScale(24) }}>{avatar_url}</Text>
+          )
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <Ionicons name="person" size={moderateScale(24)} color="#444" />
@@ -73,6 +91,6 @@ export const RankItem = ({ rank, username, score, avatar_url, isCurrentUser, acc
       }}>
         {score}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 };

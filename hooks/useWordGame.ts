@@ -1,15 +1,21 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CellData, CellStatus } from "../types";
+import { AppState, AppStateStatus } from "react-native";
+import Toast from "react-native-toast-message";
+import { CellStatus, Row } from "../types";
 import { toUpperTurkish } from "../utils/stringUtils";
+import { isValidWord } from "../utils/wordUtils";
 
 interface UseWordGameProps {
   word: string;
   wordLength: number;
   maxRows?: number;
-  onSuccess?: (points: number, attempts: number) => void;
-  onFail?: (attempts: number) => void;
+  onSuccess?: (points: number, attempts: number, fairPlayData: { isFairPlay: boolean; backgroundCount: number; backgroundTotalTime: number }) => void;
+  onFail?: (attempts: number, fairPlayData: { isFairPlay: boolean; backgroundCount: number; backgroundTotalTime: number }) => void;
   onScoreUpdate?: (points: number) => void;
+  onRiskExecuted?: () => void;
+  onRiskSuccess?: () => void;
+  onFairPlayViolation?: (reason: string) => void;
   isBlind?: boolean;
   isRadarActive?: boolean;
 }
@@ -21,6 +27,9 @@ export const useWordGame = ({
   onSuccess,
   onFail,
   onScoreUpdate,
+  onRiskExecuted,
+  onRiskSuccess,
+  onFairPlayViolation,
   isBlind = false,
   isRadarActive = false,
 }: UseWordGameProps) => {
@@ -32,16 +41,16 @@ export const useWordGame = ({
     [],
   );
 
-  const [grid, setGrid] = useState<{ id: string; cells: CellData[] }[]>(
+  const [grid, setGrid] = useState<Row[]>(
     Array.from({ length: maxRows }, (_, i) => generateRow(wordLength, i)),
   );
   const [currentRow, setCurrentRow] = useState(0);
   const [currentGuess, setCurrentGuess] = useState("");
   const [isWaiting, setIsWaiting] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
-  const [hintStatuses, setHintStatuses] = useState<
-    Record<string, "correct" | "absent">
-  >({});
+  const [hintStatuses, setHintStatuses] = useState<Record<string, CellStatus>>(
+    {},
+  );
   const [lastFeedback, setLastFeedback] = useState<{
     correctPos: number;
     correctLetters: number;
@@ -52,6 +61,17 @@ export const useWordGame = ({
   const [jokerStatuses, setJokerStatuses] = useState<
     Record<string, CellStatus>
   >({});
+  const [analysisStatuses, setAnalysisStatuses] = useState<
+    Record<string, CellStatus>
+  >({});
+
+  // Fair Play State
+  const [backgroundCount, setBackgroundCount] = useState(0);
+  const [backgroundTotalTime, setBackgroundTotalTime] = useState(0);
+  const [isFairPlay, setIsFairPlay] = useState(true);
+
+  const appState = useRef(AppState.currentState);
+  const backgroundStartTime = useRef<number | null>(null);
 
   const currentGuessRef = useRef(currentGuess);
   const wordRef = useRef(word);
@@ -85,12 +105,56 @@ export const useWordGame = ({
     penaltyRows,
   ]);
 
+  // AppState monitoring for Fair Play
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        // App returned to foreground
+        if (backgroundStartTime.current) {
+          const duration = (Date.now() - backgroundStartTime.current) / 1000;
+          
+          // Grace period of 3 seconds (accidental swipes, checking time etc.)
+          if (duration > 3) {
+            setBackgroundTotalTime((prev) => prev + duration);
+            
+            // If total background time > 10s or exits > 3, flag as unfair
+            if (backgroundTotalTime + duration > 10 || backgroundCount >= 2) {
+              setIsFairPlay(false);
+              onFairPlayViolation?.("Arka plana çok fazla çıkış tespit edildi.");
+            }
+          }
+          backgroundStartTime.current = null;
+        }
+      }
+
+      if (nextAppState === "background") {
+        // App went to background
+        if (!isGameOver) {
+          setBackgroundCount((prev) => prev + 1);
+          backgroundStartTime.current = Date.now();
+        }
+      }
+
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isGameOver, backgroundTotalTime, backgroundCount, onFairPlayViolation]);
+
   // Calculate keyboard letter statuses efficiently
   const letterStatuses = useMemo(() => {
     // Start with clues from power-ups (always visible)
     const statuses: Record<string, CellStatus> = {
       ...hintStatuses,
       ...jokerStatuses,
+      ...analysisStatuses,
     };
 
     // In Blind Mode, normally we ONLY show hintStatuses (Magnet, First Letter, etc.).
@@ -150,6 +214,11 @@ export const useWordGame = ({
       setBonusRows(0);
       setPenaltyRows(0);
       setIsRiskModeActive(false);
+      setAnalysisStatuses({});
+      setBackgroundCount(0);
+      setBackgroundTotalTime(0);
+      setIsFairPlay(true);
+      backgroundStartTime.current = null;
     },
     [maxRows, wordLength],
   );
@@ -167,6 +236,17 @@ export const useWordGame = ({
 
       if (key === "ENTER") {
         if (currentGuessValue.length === wordLengthRef.current) {
+          if (!isValidWord(currentGuessValue)) {
+            Toast.show({
+              type: "error",
+              text1: "Geçersiz Kelime",
+              text2: "Kelime dağarcığımızda bulunmuyor.",
+              position: "top",
+              visibilityTime: 2000,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            return;
+          }
           const targetChars = currentWordValue.split("");
           const guessChars = currentGuessValue.split("");
           const statuses: CellStatus[] = Array(wordLengthRef.current).fill(
@@ -206,6 +286,7 @@ export const useWordGame = ({
             } else {
               riskPenalty = true;
             }
+            onRiskExecuted?.(); // Notify consumption
             setIsRiskModeActive(false);
           }
           let roundScore = 0;
@@ -220,21 +301,22 @@ export const useWordGame = ({
             }),
           };
 
-          if (riskReward) {
-            finalGrid.push(
-              generateRow(wordLengthRef.current, finalGrid.length),
-            );
-            setBonusRows((prev) => prev + 1);
-          }
-
           if (normalizedGuess === normalizedWord) {
             setGrid(finalGrid);
             setIsWaiting(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             const baseBonus = 100;
             const multiplier = maxRows - currentRowValue;
-            const totalPoints = roundScore + baseBonus * multiplier;
-            onSuccess?.(totalPoints, currentRowValue + 1);
+            let totalPoints = roundScore + baseBonus * multiplier;
+            if (riskReward) {
+              totalPoints *= 2;
+              onRiskSuccess?.();
+            }
+            onSuccess?.(totalPoints, currentRowValue + 1, {
+              isFairPlay,
+              backgroundCount,
+              backgroundTotalTime: Math.round(backgroundTotalTime)
+            });
           } else {
             const correctPos = statuses.filter((s) => s === "correct").length;
             const correctLetters = statuses.filter(
@@ -251,15 +333,36 @@ export const useWordGame = ({
               setIsWaiting(true);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
               onScoreUpdate?.(roundScore - 100);
-              onFail?.(currentRowValue + 1);
+              onFail?.(currentRowValue + 1, {
+                isFairPlay,
+                backgroundCount,
+                backgroundTotalTime: Math.round(backgroundTotalTime)
+              });
             } else {
               onScoreUpdate?.(roundScore);
 
-              setGrid(finalGrid);
               if (riskPenalty) {
-                // Skips an extra row as penalty (current + next)
-                setCurrentRow((prev) => prev + 2);
+                // Penalty: current row stays as clues, but last row is deleted
+                setPenaltyRows((prev) => prev + 1);
+
+                let updatedGrid = [...gridValue];
+                // Remove the last row as penalty
+                if (updatedGrid.length > 0) {
+                  updatedGrid.pop();
+                }
+
+                setGrid(updatedGrid);
+                setCurrentRow((prev) => prev + 1);
+
+                Toast.show({
+                  type: "error",
+                  text1: "Risk Başarısız!",
+                  text2: "En alttan bir hak kaybettin!",
+                  position: "top",
+                  visibilityTime: 3000,
+                });
               } else {
+                setGrid(finalGrid);
                 setCurrentRow((prev) => prev + 1);
               }
 
@@ -268,36 +371,85 @@ export const useWordGame = ({
           }
         }
       } else if (key === "⌫") {
+        // Clear analysis colors if any
+        const currentRowCells = gridValue[currentRowValue].cells;
+        if (currentRowCells.some((c) => c.status !== "empty")) {
+          setGrid((prev) => {
+            const next = [...prev];
+            next[currentRowValue] = {
+              id: `clear-${Math.random().toString(36).substr(2, 9)}-${currentRowValue}`,
+              cells: Array(wordLengthRef.current).fill({
+                char: "",
+                status: "empty",
+              }),
+            };
+            return next;
+          });
+        }
         setCurrentGuess((prev) => prev.slice(0, -1));
       } else if (
         currentGuessValue.length < wordLengthRef.current &&
         key !== "ENTER"
       ) {
+        // Clear analysis colors if any before adding a new char
+        const currentRowCells = gridValue[currentRowValue].cells;
+        if (currentRowCells.some((c) => c.status !== "empty")) {
+          setGrid((prev) => {
+            const next = [...prev];
+            next[currentRowValue] = {
+              id: `clear-${Math.random().toString(36).substr(2, 9)}-${currentRowValue}`,
+              cells: Array(wordLengthRef.current).fill({
+                char: "",
+                status: "empty",
+              }),
+            };
+            return next;
+          });
+        }
         setCurrentGuess((prev) => prev + key);
       }
     },
-    [wordLength, maxRows, bonusRows, onSuccess, onFail, onScoreUpdate],
+    [
+      wordLength,
+      maxRows,
+      bonusRows,
+      onSuccess,
+      onFail,
+      onScoreUpdate,
+      onRiskExecuted,
+    ],
   );
 
   const getHint = () => {
-    // Henüz yeşil olmayan harfleri bul
+    // Sadece klavyede durumu olmayan (sarı veya yeşil OLMAYAN) harfleri bul
     const unknownIndices = word
       .split("")
-      .map((char, i) => ({ char, i }))
-      .filter(({ char }) => letterStatuses[char] !== "correct");
+      .map((char, i) => ({ char: toUpperTurkish(char), i }))
+      .filter(({ char }) => !letterStatuses[char]);
 
-    if (unknownIndices.length === 0) return;
+    if (unknownIndices.length === 0) {
+      Toast.show({
+        type: "error",
+        text1: "İpucu Kullanılamadı",
+        text2: "Açılacak yeni bir harf kalmadı.",
+        position: "top",
+        visibilityTime: 2000,
+      });
+      return false;
+    }
 
     // Rastgele birini seç ve 'correct' olarak işaretle
     const randomPick =
       unknownIndices[Math.floor(Math.random() * unknownIndices.length)];
     setHintStatuses((prev) => ({ ...prev, [randomPick.char]: "correct" }));
+    return true;
   };
 
   const addHint = (char: string, status: "correct" | "absent" = "correct") => {
     if (!char) return;
     setHintStatuses((prev) => ({ ...prev, [toUpperTurkish(char)]: status }));
   };
+
   const useBomb = () => {
     const alphabet = "ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ".split("");
     const wordUpper = toUpperTurkish(word);
@@ -309,7 +461,16 @@ export const useWordGame = ({
       (char) => !wordSet.has(char) && !letterStatuses[char],
     );
 
-    if (candidates.length === 0) return;
+    if (candidates.length === 0) {
+      Toast.show({
+        type: "error",
+        text1: "Bomba Kullanılamadı",
+        text2: "Eleyecek harf kalmadı.",
+        position: "top",
+        visibilityTime: 2000,
+      });
+      return false;
+    }
 
     // Rastgele 3 tanesini seç (veya kalan kaç taneyse)
     const toEliminate = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
@@ -319,10 +480,11 @@ export const useWordGame = ({
       newHints[char] = "absent";
     });
     setHintStatuses(newHints);
+    return true;
   };
 
   const useJoker = (char: string) => {
-    if (!char) return;
+    if (!char) return false;
     const upperChar = toUpperTurkish(char);
     const upperWord = toUpperTurkish(word);
 
@@ -331,27 +493,29 @@ export const useWordGame = ({
     const status = exists ? "present" : "absent";
 
     setJokerStatuses((prev) => ({ ...prev, [upperChar]: status }));
+    return true;
   };
 
   const useVeto = useCallback(() => {
-    if (currentRowRef.current === 0) return;
+    if (currentRowRef.current === 0) return false;
 
     const targetRow = currentRowRef.current - 1;
 
     setGrid((prevGrid) => {
       const newGrid = [...prevGrid];
       newGrid[targetRow] = {
-        ...newGrid[targetRow],
-        cells: Array(wordLengthRef.current).fill({
+        id: `row-veto-${Math.random().toString(36).substr(2, 9)}`, // ID'yi değiştirerek komple yeniden mount ettiriyoruz
+        cells: Array.from({ length: wordLengthRef.current }, () => ({
           char: "",
           status: "empty",
-        }),
+        })),
       };
       return newGrid;
     });
 
     setCurrentRow((prev) => prev - 1);
     setCurrentGuess("");
+    return true;
   }, [onScoreUpdate]); // onScoreUpdate and others are already in handleKeyPress deps, adding what's needed for safety
 
   const addExtraAttempt = useCallback(() => {
@@ -362,6 +526,131 @@ export const useWordGame = ({
       return newGrid;
     });
   }, [wordLength]);
+
+  const useLightning = useCallback(() => {
+    if (!wordRef.current) return false;
+    const currentWord = wordRef.current;
+
+    // Update hintStatuses to mark these letters on the keyboard as first and last
+    setHintStatuses((prev) => ({
+      ...prev,
+      [toUpperTurkish(currentWord[0])]: "first",
+      [toUpperTurkish(currentWord[currentWord.length - 1])]: "last",
+    }));
+
+    return true;
+  }, []);
+  const useMirror = useCallback(() => {
+    if (!wordRef.current) return false;
+    const wordUpper = toUpperTurkish(wordRef.current);
+    const charArray = wordUpper.split("");
+    const uniqueChars = new Set(charArray);
+    const hasDuplicates = uniqueChars.size < charArray.length;
+
+    Toast.show({
+      type: "info",
+      text1: "Ayna Tarandı",
+      text2: hasDuplicates
+        ? "Bu kelimede aynı harften birden fazla var!"
+        : "Bu kelimede her harf benzersiz (tekrar yok).",
+      position: "top",
+      visibilityTime: 3000,
+    });
+
+    return true;
+  }, []);
+
+  const useAnalysis = useCallback(() => {
+    const currentGuessValue = currentGuessRef.current;
+    const currentWordValue = wordRef.current;
+    const currentRowValue = currentRowRef.current;
+    const wordLen = wordLengthRef.current;
+
+    if (currentGuessValue.length !== wordLen) {
+      Toast.show({
+        type: "error",
+        text1: "Eksik Kelime",
+        text2: "Analiz için kelimeyi tamamlamalısın.",
+        position: "top",
+      });
+      return false;
+    }
+
+    const targetChars = currentWordValue.split("");
+    const guessChars = currentGuessValue.split("");
+    const statuses: CellStatus[] = Array(wordLen).fill("absent");
+    const remainingCounts: Record<string, number> = {};
+
+    targetChars.forEach((char) => {
+      remainingCounts[char] = (remainingCounts[char] || 0) + 1;
+    });
+
+    guessChars.forEach((char, index) => {
+      if (char === targetChars[index]) {
+        statuses[index] = "correct";
+        remainingCounts[char]--;
+      }
+    });
+
+    guessChars.forEach((char, index) => {
+      if (statuses[index] !== "correct" && remainingCounts[char] > 0) {
+        if (targetChars.includes(char)) {
+          statuses[index] = "present";
+          remainingCounts[char]--;
+        }
+      }
+    });
+
+    // Permanent keyboard update
+    setAnalysisStatuses((prev) => {
+      const next = { ...prev };
+      guessChars.forEach((char, index) => {
+        const status = statuses[index];
+        const upperChar = toUpperTurkish(char);
+        if (status === "correct") next[upperChar] = "correct";
+        else if (status === "present" && next[upperChar] !== "correct")
+          next[upperChar] = "present";
+        else if (!next[upperChar]) next[upperChar] = "absent";
+      });
+      return next;
+    });
+
+    // Temporary grid update
+    setGrid((prev) => {
+      const next = [...prev];
+      next[currentRowValue] = {
+        ...next[currentRowValue],
+        cells: guessChars.map((char, index) => ({
+          char,
+          status: statuses[index],
+        })),
+      };
+      return next;
+    });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Auto-clear after 2 seconds with new ID
+    setTimeout(() => {
+      setGrid((prev) => {
+        // Only clear if still on the same row and it has analysis colors
+        if (
+          prev[currentRowValue] &&
+          prev[currentRowValue].cells.some((c) => c.status !== "empty")
+        ) {
+          const next = [...prev];
+          next[currentRowValue] = {
+            id: `row-clear-${Math.random().toString(36).substr(2, 9)}-${currentRowValue}`,
+            cells: Array(wordLen).fill({ char: "", status: "empty" }),
+          };
+          return next;
+        }
+        return prev;
+      });
+    }, 2000);
+
+    return true;
+  }, []);
 
   useEffect(() => {
     isRiskModeActiveRef.current = isRiskModeActive;
@@ -385,9 +674,17 @@ export const useWordGame = ({
     useBomb,
     useJoker,
     useVeto,
+    useLightning,
+    useMirror,
+    useAnalysis,
     isRiskModeActive,
     setIsRiskModeActive,
     lastFeedback,
     maxRows: maxRows + bonusRows - penaltyRows,
+    isFairPlay,
+    backgroundStats: {
+      count: backgroundCount,
+      totalTime: backgroundTotalTime
+    }
   };
 };

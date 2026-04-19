@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import GameHeader from '../components/Game/GameHeader';
 import PowerUpToolbar from '../components/Game/PowerUpToolbar';
@@ -16,11 +17,13 @@ import { usePowerUps } from '../hooks/usePowerUps';
 import { useResponsive } from '../hooks/useResponsive';
 import { useWordGame } from '../hooks/useWordGame';
 import { statsService } from '../services/statsService';
+import { POWER_UP_DEFINITIONS, PowerUpKey } from '../constants/powerUps';
 import { getWordByCategory } from '../services/wordService';
 import { toUpperTurkish } from '../utils/stringUtils';
+import Colors from '../constants/Colors';
 
-const SURVIVAL_ACCENT = '#ff3b30';
-const SURVIVAL_BG = '#0a0a0a';
+const SURVIVAL_ACCENT = Colors.modes.survival.accent;
+const SURVIVAL_BG = Colors.modes.survival.background;
 const RECOVERY_TARGET = 5;
 const DIFFICULTY_MILESTONE = 10;
 
@@ -43,7 +46,10 @@ export default function SurvivalScreen() {
   const [solvedCount, setSolvedCount] = useState(0);
   const [recoveryProgress, setRecoveryProgress] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isSessionFairPlay, setIsSessionFairPlay] = useState(true);
+  const [sessionBackgroundStats, setSessionBackgroundStats] = useState({ count: 0, totalTime: 0 });
   const resetGameStatesRef = React.useRef<any>(null);
+  const setPowerUpStatesRef = React.useRef<any>(null);
   const [activeBuffs, setActiveBuffs] = useState({
     shield: false,
     extraAttempt: false
@@ -67,16 +73,35 @@ export default function SurvivalScreen() {
     return () => clearInterval(interval);
   }, [isGameOver, isSettingsVisible]);
 
+  // Auto-clear revealed info after 2.5 seconds
+  useEffect(() => {
+    if (revealedInfo && !isGameOver) {
+      const timer = setTimeout(() => {
+        setRevealedInfo(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [revealedInfo, isGameOver]);
+
   // Difficulty Logic: 1-10 -> 4 rows, 11+ -> 3 rows
   const getBaseMaxRows = (count: number) => {
     return count >= DIFFICULTY_MILESTONE ? 3 : 4;
   };
 
-  const currentMaxRows = getBaseMaxRows(solvedCount) + (activeBuffs.extraAttempt ? 1 : 0);
+  const currentMaxRows = getBaseMaxRows(solvedCount);
 
   const saveResultMutation = useMutation({
     mutationFn: (data: any) => statsService.saveGameResult(user!.id, data),
     onSuccess: (res) => {
+      if (!res.success && res.reason === 'fair_play_violation') {
+        Toast.show({
+          type: 'info',
+          text1: 'Adil Oyun Uyarısı',
+          text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+          position: 'top',
+          visibilityTime: 4000
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
     },
@@ -94,10 +119,19 @@ export default function SurvivalScreen() {
     setScore(prev => prev + points);
   }, []);
 
-  const onSuccess = useCallback((points: number) => {
+  const onSuccess = useCallback((points: number, fairPlayData: any) => {
     const newSolvedCount = solvedCount + 1;
     setSolvedCount(newSolvedCount);
     setScore(prev => prev + points);
+
+    // Track Fair Play
+    if (fairPlayData) {
+      if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+      setSessionBackgroundStats(prev => ({
+        count: prev.count + fairPlayData.backgroundCount,
+        totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+      }));
+    }
 
     // Boss Word Reward (+2 life every 10 words)
     if (newSolvedCount % DIFFICULTY_MILESTONE === 0) {
@@ -126,10 +160,19 @@ export default function SurvivalScreen() {
       setWord(nextWord);
       resetGameStatesRef.current?.(getBaseMaxRows(newSolvedCount), nextWord.length);
       setGameId(p => p + 1);
-    }, 1500);
+    }, 1000);
   }, [solvedCount, category, recoveryProgress, getBaseMaxRows]);
 
-  const onFail = useCallback(() => {
+  const onFail = useCallback((attempts: any, fairPlayData: any) => {
+    // Track Fair Play
+    if (fairPlayData) {
+      if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+      setSessionBackgroundStats(prev => ({
+        count: prev.count + fairPlayData.backgroundCount,
+        totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+      }));
+    }
+
     // Check Shield
     if (activeBuffs.shield) {
       setRevealedInfo("KALKAN KORUDU!");
@@ -142,7 +185,7 @@ export default function SurvivalScreen() {
         setWord(nextWord);
         resetGameStatesRef.current?.(getBaseMaxRows(solvedCount), nextWord.length);
         setGameId(p => p + 1);
-      }, 1500);
+      }, 1000);
       return;
     }
 
@@ -161,13 +204,14 @@ export default function SurvivalScreen() {
           score: score,
           solved_count: solvedCount,
           duration_seconds: elapsedSeconds,
-          category
+          category,
+          is_fair_play: isSessionFairPlay && (fairPlayData?.isFairPlay ?? true)
         });
       }
       setTimeout(() => {
         setRevealedInfo(null);
         setIsGameOver(true);
-      }, 3000);
+      }, 1000);
     } else {
       setTimeout(() => {
         setRevealedInfo(null);
@@ -176,43 +220,56 @@ export default function SurvivalScreen() {
         setWord(nextWord);
         resetGameStatesRef.current?.(getBaseMaxRows(solvedCount), nextWord.length);
         setGameId(p => p + 1);
-      }, 3000);
+      }, 1000);
     }
-  }, [lives, solvedCount, score, category, user, activeBuffs, word, getBaseMaxRows, saveResultMutation]);
+  }, [lives, solvedCount, score, category, user, activeBuffs, word, getBaseMaxRows, saveResultMutation, isSessionFairPlay, elapsedSeconds]);
 
-  const { configs: powerUpConfigs, resetPowerUps } = usePowerUps(
-    ['shield', 'extra', 'hint', 'bomb', 'skip'],
+  const { configs: powerUpConfigs, resetPowerUps, setStates: setPowerUpStates } = usePowerUps(
+    ['shield', 'extra', 'risk', 'hint', 'bomb', 'skip'],
     {
-      shield: { count: 1 },
-      extra: { count: 1 },
-      hint: { count: 1 },
-      bomb: { count: 1 },
+      shield: { count: 2 },
+      extra: { count: 2 },
+      risk: { count: 1, isActive: false },
+      hint: { count: 3 },
+      bomb: { count: 2 },
       skip: { count: 1 }
     },
     (key) => {
+      if (key === 'risk') {
+        setIsRiskModeActive(!isRiskModeActive);
+        return 'toggle';
+      }
       if (key === 'shield') {
-        if (isGameOver || activeBuffs.shield) return;
+        if (isGameOver || activeBuffs.shield) return false;
         setActiveBuffs(prev => ({ ...prev, shield: true }));
         setRevealedInfo("Can Kalkanı Aktif!");
+        return true;
       }
       if (key === 'extra') {
-        if (isGameOver || activeBuffs.extraAttempt) return;
+        if (isGameOver || activeBuffs.extraAttempt) return false;
         addExtraAttempt();
         setActiveBuffs(prev => ({ ...prev, extraAttempt: true }));
         setRevealedInfo("+1 Deneme Hakkı!");
+        return true;
       }
       if (key === 'hint') {
-        if (isGameOver) return;
-        addHint(toUpperTurkish(word[0]), 'correct');
+        if (isGameOver) return false;
+
+        getHint();
+
+        if (!word) return false;
         setRevealedInfo(`İpucu: ${toUpperTurkish(word[0])}`);
+        return true;
       }
       if (key === 'bomb') {
-        if (isGameOver) return;
-        useBomb();
+        if (isGameOver) return false;
+        const success = useBomb();
+        if (success === false) return false;
         setRevealedInfo("3 Harf Elendi!");
+        return true;
       }
       if (key === 'skip') {
-        if (isGameOver) return;
+        if (isGameOver) return false;
         setRevealedInfo("Kelime Atlandı!");
         setTimeout(() => {
           setRevealedInfo(null);
@@ -221,10 +278,30 @@ export default function SurvivalScreen() {
           setWord(nextWord);
           resetGameStatesRef.current?.(getBaseMaxRows(solvedCount), nextWord.length);
           setGameId(p => p + 1);
-        }, 1000);
+        }, 300);
+        return true;
       }
     }
   );
+
+  const handleRiskSuccess = useCallback(() => {
+    const rewards: any[] = ['shield', 'extra', 'hint', 'bomb', 'skip'];
+    const randomKey = rewards[Math.floor(Math.random() * rewards.length)];
+    const label = POWER_UP_DEFINITIONS[randomKey as keyof typeof POWER_UP_DEFINITIONS]?.label || randomKey;
+
+    if (setPowerUpStatesRef.current) {
+      setPowerUpStatesRef.current((prev: any) => ({
+        ...prev,
+        [randomKey]: { ...prev[randomKey], count: (prev[randomKey]?.count || 0) + 1 }
+      }));
+    }
+
+    setRevealedInfo(`RİSK BAŞARILI! +${label} KAZANDIN!`);
+  }, []);
+
+  useEffect(() => {
+    setPowerUpStatesRef.current = setPowerUpStates;
+  }, [setPowerUpStates]);
 
   const {
     grid,
@@ -233,13 +310,24 @@ export default function SurvivalScreen() {
     handleKeyPress,
     letterStatuses,
     resetGameStates,
-    addHint,
+    getHint,
     addExtraAttempt,
     useBomb,
+    setIsRiskModeActive,
+    isRiskModeActive,
   } = useWordGame({
     word,
     wordLength: word ? word.length : 5,
     maxRows: currentMaxRows,
+    onRiskExecuted: () => {
+      if (setPowerUpStatesRef.current) {
+        setPowerUpStatesRef.current((prev: any) => ({
+          ...prev,
+          risk: { count: Math.max(0, (prev.risk?.count || 1) - 1), isActive: false }
+        }));
+      }
+    },
+    onRiskSuccess: handleRiskSuccess,
     onSuccess,
     onFail,
     onScoreUpdate,
@@ -260,14 +348,17 @@ export default function SurvivalScreen() {
     setIsGameOver(false);
     resetGameStatesRef.current?.(4, newWord.length);
     resetPowerUps({
-      shield: { count: 1 },
-      extra: { count: 1 },
-      hint: { count: 1 },
-      bomb: { count: 1 },
+      shield: { count: 2 },
+      extra: { count: 2 },
+      risk: { count: 1, isActive: false },
+      hint: { count: 3 },
+      bomb: { count: 2 },
       skip: { count: 1 }
     });
     setGameId(p => p + 1);
     setElapsedSeconds(0);
+    setIsSessionFairPlay(true);
+    setSessionBackgroundStats({ count: 0, totalTime: 0 });
     setIsSettingsVisible(false);
   };
 
@@ -320,7 +411,7 @@ export default function SurvivalScreen() {
         settingsIcon="options-outline"
       />
 
-      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing.md }}>
+      <View style={{ flex: 1, justifyContent: 'flex-start', paddingHorizontal: spacing.md, marginTop: -spacing.md }}>
         {/* TOP STATUS BAR (SOLVED COUNT & BOSS INDICATOR) */}
         <View style={{
           flexDirection: 'row',
@@ -401,9 +492,7 @@ export default function SurvivalScreen() {
         </View>
       </View>
 
-      <View style={{ paddingBottom: spacing.sm }}>
-        <PowerUpToolbar configs={powerUpConfigs} />
-      </View>
+      <PowerUpToolbar configs={powerUpConfigs} />
 
       <Keyboard
         onKeyPress={handleKeyPress}
@@ -427,6 +516,8 @@ export default function SurvivalScreen() {
         guesses={score}
         mode="survival"
         extraData={solvedCount}
+        isFairPlay={isSessionFairPlay}
+        backgroundStats={sessionBackgroundStats}
         onRestart={() => {
           setIsGameOver(false);
           setIsSettingsVisible(true);

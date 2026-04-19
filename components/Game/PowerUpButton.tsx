@@ -27,8 +27,8 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
   const isDisabled = count <= 0;
 
   const handlePress = () => {
-    if (isDisabled && label !== "RİSK") return;
-    
+    if (isDisabled) return;
+
     Animated.sequence([
       Animated.timing(scale, { toValue: 0.88, duration: 80, useNativeDriver: true }),
       Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: true }),
@@ -46,7 +46,7 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={400}
-        disabled={isDisabled && label !== "RİSK"}
+        disabled={isDisabled}
         style={{ alignItems: 'center' }}
       >
         <Animated.View style={{
@@ -56,10 +56,10 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
           borderRadius: wp(12),
           backgroundColor: (isDisabled && label !== "RİSK") ? 'rgba(255,255,255,0.04)' : (isActive ? `${accentColor}40` : `${accentColor}18`),
           borderWidth: 1.5,
-          borderColor: (isDisabled && label !== "RİSK") ? 'rgba(255,255,255,0.08)' : (isActive ? accentColor : `${accentColor}50`),
+          borderColor: isDisabled ? 'rgba(255,255,255,0.08)' : (isActive ? accentColor : `${accentColor}50`),
           justifyContent: 'center',
           alignItems: 'center',
-          shadowColor: (isDisabled && label !== "RİSK") ? 'transparent' : accentColor,
+          shadowColor: isDisabled ? 'transparent' : accentColor,
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: (isDisabled && label !== "RİSK") ? 0 : 0.5,
           shadowRadius: 10,
@@ -78,15 +78,14 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
             width: 18,
             height: 18,
             borderRadius: 9,
-            backgroundColor: (isDisabled && label !== "RİSK") ? '#2a2a2c' : accentColor,
+            backgroundColor: isDisabled ? '#2a2a2c' : accentColor,
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 1.5,
             borderColor: '#121212',
-            display: label === "RİSK" ? 'none' : 'flex'
           }}>
             <Text style={{
-              color: (isDisabled && label !== "RİSK") ? 'rgba(255,255,255,0.3)' : '#000',
+              color: isDisabled ? 'rgba(255,255,255,0.3)' : '#000',
               fontSize: 10,
               fontWeight: '900',
             }}>

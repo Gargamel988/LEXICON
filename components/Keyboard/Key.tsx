@@ -24,7 +24,9 @@ const STATUS_COLORS = {
   correct: '#6aaa64',
   present: '#c9b458',
   absent: '#222',
-  default: '#444'
+  default: '#444',
+  first: '#6aaa64',
+  last: '#6aaa64'
 };
 
 const Key: React.FC<KeyProps> = ({ label, onPress, status, statuses, isBlind, width: propWidth }) => {
@@ -33,7 +35,7 @@ const Key: React.FC<KeyProps> = ({ label, onPress, status, statuses, isBlind, wi
   const bgColor = useSharedValue(STATUS_COLORS.default);
 
   const getBgColor = (s?: CellStatus) => {
-    if (s === 'correct') return STATUS_COLORS.correct;
+    if (s === 'correct' || s === 'first' || s === 'last') return STATUS_COLORS.correct;
     if (s === 'present') return STATUS_COLORS.present;
     if (s === 'absent') return STATUS_COLORS.absent;
     return STATUS_COLORS.default;
@@ -91,6 +93,31 @@ const Key: React.FC<KeyProps> = ({ label, onPress, status, statuses, isBlind, wi
     );
   };
 
+  const renderStatusBadge = () => {
+    if (status !== 'first' && status !== 'last') return null;
+
+    return (
+      <View style={{
+        position: 'absolute',
+        top: 2,
+        right: 4,
+        backgroundColor: '#fff',
+        borderRadius: 4,
+        paddingHorizontal: 3,
+        paddingVertical: 1,
+        zIndex: 10
+      }}>
+        <Text style={{
+          fontSize: moderateScale(8),
+          color: STATUS_COLORS.correct,
+          fontWeight: '900'
+        }}>
+          {status === 'first' ? 'İ' : 'S'}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <AnimatedPressable
       onPressIn={handlePressIn}
@@ -109,6 +136,7 @@ const Key: React.FC<KeyProps> = ({ label, onPress, status, statuses, isBlind, wi
       ]}
     >
       {renderMultiBackground()}
+      {renderStatusBadge()}
       <Text style={{
         color: '#fff',
         fontWeight: '900',

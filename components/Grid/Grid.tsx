@@ -1,10 +1,10 @@
 import React from 'react';
 import { Dimensions, View } from 'react-native';
-import { CellData } from '../../types';
-import Row from './Row';
+import { Row as RowData } from '../../types';
+import GridRow from './Row';
 
 interface GridProps {
-  grid: { id: string; cells: CellData[] }[];
+  grid: RowData[];
   currentRow: number;
   currentGuess: string;
   cellSize?: number;
@@ -50,9 +50,9 @@ const Grid: React.FC<GridProps & { maxGridWidth?: number }> = React.memo(({
       {grid && grid.map((row, rowIndex) => {
         if (!row) return null;
         return (
-          <Row
+          <GridRow
             key={row.id}
-            row={row.cells}
+            rowData={row}
             rowIndex={rowIndex}
             currentRow={currentRow}
             currentGuess={currentGuess}

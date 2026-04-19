@@ -1,8 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
-import Animated, { Easing, interpolateColor, useAnimatedStyle, useSharedValue, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { View, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
+import Animated, { Easing, FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import GameHeader from '../components/Game/GameHeader';
@@ -18,10 +19,11 @@ import { useResponsive } from '../hooks/useResponsive';
 import { useWordGame } from '../hooks/useWordGame';
 import { statsService } from '../services/statsService';
 import { getWordByCategory } from '../services/wordService';
+import Colors from '../constants/Colors';
 
 const GAME_TIME = 180;
-const BLITZ_ACCENT = '#ff7e79';
-const BLITZ_BG = '#121212';
+const BLITZ_ACCENT = Colors.modes.blitz.accent;
+const BLITZ_BG = Colors.modes.blitz.background;
 const FEVER_BG = '#440000';
 
 export default function TimedGameScreen() {
@@ -29,6 +31,7 @@ export default function TimedGameScreen() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { wp, moderateScale } = useResponsive();
+    const setPowerUpStatesRef = useRef<any>(null);
 
     const [isReady, setIsReady] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('karisik');
@@ -41,24 +44,35 @@ export default function TimedGameScreen() {
     const [currentWord, setCurrentWord] = useState('');
     const [currentCategory, setCurrentCategory] = useState('');
     const [revealedWord, setRevealedWord] = useState<string | null>(null);
+    const [isSessionFairPlay, setIsSessionFairPlay] = useState(true);
+    const [sessionBackgroundStats, setSessionBackgroundStats] = useState({ count: 0, totalTime: 0 });
 
     // NEW BLAST MECHANICS
     const [combo, setCombo] = useState(0);
     const [isFrozen, setIsFrozen] = useState(false);
 
-    const { configs: powerUpConfigs } = usePowerUps(['hint', 'bomb', 'freeze', 'skip', 'lightning'], {
-        hint: { count: 2 },
+    const { configs: powerUpConfigs, setStates: setPowerUpStates, resetPowerUps } = usePowerUps(['hint', 'bomb', 'freeze', 'skip', 'lightning', 'risk'], {
+        hint: { count: 3 },
         bomb: { count: 2 },
-        freeze: { count: 1 },
-        skip: { count: 2 },
-        lightning: { count: 1 }
+        freeze: { count: 2 },
+        skip: { count: 3 },
+        lightning: { count: 2 },
+        risk: { count: 1, isActive: false }
     }, (key) => {
-        if (key === 'hint') handleHint();
-        if (key === 'bomb') handleBomb();
-        if (key === 'freeze') handleFreeze();
-        if (key === 'skip') handleSkip();
-        if (key === 'lightning') handleLightning();
+        if (key === 'hint') return handleHint();
+        if (key === 'bomb') return handleBomb();
+        if (key === 'freeze') return handleFreeze();
+        if (key === 'skip') return handleSkip();
+        if (key === 'lightning') return handleLightning();
+        if (key === 'risk') {
+            setIsRiskModeActive(!isRiskModeActive);
+            return 'toggle';
+        }
     });
+
+    useEffect(() => {
+        setPowerUpStatesRef.current = setPowerUpStates;
+    }, [setPowerUpStates]);
 
     const comboScale = useSharedValue(0);
     const feverValue = useSharedValue(0); // 0 to 1
@@ -95,24 +109,42 @@ export default function TimedGameScreen() {
         if (user) {
             saveResultMutation.mutate({
                 mode: 'blitz',
-                is_winner: solvedCountRef.current > 0,
                 score: scoreRef.current,
-                attempts: solvedCountRef.current,
+                solved_count: solvedCountRef.current,
+                is_winner: true,
                 duration_seconds: GAME_TIME,
                 category: selectedCategoryRef.current,
+                is_fair_play: isSessionFairPlay
             });
         }
     }, [isGameOver, user]);
 
-    const { grid, currentRow, currentGuess, handleKeyPress, letterStatuses, resetGameStates: gameReset, getHint, useBomb, setGrid } = useWordGame({
+    const { grid, currentRow, currentGuess, handleKeyPress, letterStatuses, resetGameStates: gameReset, getHint, useBomb, setGrid, useLightning, isRiskModeActive, setIsRiskModeActive } = useWordGame({
         word: currentWord,
         wordLength: currentWord ? currentWord.length : 5,
         maxRows: 6,
+        onRiskExecuted: () => {
+            if (setPowerUpStatesRef.current) {
+                setPowerUpStatesRef.current((prev: any) => ({
+                    ...prev,
+                    risk: { count: Math.max(0, (prev.risk?.count || 1) - 1), isActive: false }
+                }));
+            }
+        },
         onScoreUpdate: (points) => {
             const multiplier = 1 + (combo * 0.2);
             setScore(prev => prev + Math.round(points * multiplier));
         },
-        onSuccess: (points) => {
+        onSuccess: (points, attempts, fairPlayData) => {
+            // Track Fair Play
+            if (fairPlayData) {
+                if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+                setSessionBackgroundStats(prev => ({
+                    count: prev.count + fairPlayData.backgroundCount,
+                    totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+                }));
+            }
+
             const multiplier = 1 + (combo * 0.2);
             const speedBonus = Math.floor((timeLeft / GAME_TIME) * 50);
             const totalBonus = Math.round((points + speedBonus) * multiplier);
@@ -143,7 +175,16 @@ export default function TimedGameScreen() {
 
             setTimeout(() => startNextWord(), 600);
         },
-        onFail: () => {
+        onFail: (attempts, fairPlayData) => {
+            // Track Fair Play
+            if (fairPlayData) {
+                if (!fairPlayData.isFairPlay) setIsSessionFairPlay(false);
+                setSessionBackgroundStats(prev => ({
+                    count: prev.count + fairPlayData.backgroundCount,
+                    totalTime: prev.totalTime + fairPlayData.backgroundTotalTime
+                }));
+            }
+
             setCombo(0);
             feverValue.value = withTiming(0, { duration: 500 });
             setScore(prev => Math.max(0, prev - 25));
@@ -152,27 +193,33 @@ export default function TimedGameScreen() {
             setTimeout(() => {
                 setRevealedWord(null);
                 startNextWord();
-            }, 1000);
+            }, 1500);
         },
     });
 
     const handleHint = () => {
         if (isReady && !isGameOver) {
-            getHint();
+            const success = getHint();
+            return success;
         }
+        return false;
     };
 
     const handleBomb = () => {
         if (isReady && !isGameOver) {
-            useBomb();
+            const success = useBomb();
+            return success;
         }
+        return false;
     };
 
     const handleFreeze = () => {
         if (isReady && !isGameOver && !isFrozen) {
             setIsFrozen(true);
             setTimeout(() => setIsFrozen(false), 5000);
+            return true;
         }
+        return false;
     };
 
     const handleSkip = () => {
@@ -180,23 +227,17 @@ export default function TimedGameScreen() {
             setCombo(0);
             feverValue.value = withTiming(0);
             startNextWord();
+            return true;
         }
+        return false;
     };
 
     const handleLightning = () => {
         if (isReady && !isGameOver && currentWord) {
-            setGrid(prevGrid => {
-                const newGrid = [...prevGrid];
-                const cells = [...newGrid[0].cells];
-                cells[0] = { char: currentWord[0], status: 'correct' };
-                cells[currentWord.length - 1] = { char: currentWord[currentWord.length - 1], status: 'correct' };
-                newGrid[0] = { ...newGrid[0], cells };
-                return newGrid;
-            });
+            return useLightning();
         }
+        return false;
     };
-
-    // Local configs moved to usePowerUps
 
     const startTimer = () => {
         timerInterval.current = setInterval(() => {
@@ -226,7 +267,16 @@ export default function TimedGameScreen() {
 
     const saveResultMutation = useMutation({
         mutationFn: (data: any) => statsService.saveGameResult(user!.id, data),
-        onSuccess: () => {
+        onSuccess: (res) => {
+            if (res && !res.success && res.reason === 'fair_play_violation') {
+                Toast.show({
+                    type: 'info',
+                    text1: 'Adil Oyun Uyarısı',
+                    text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+                    position: 'top',
+                    visibilityTime: 4000
+                });
+            }
             queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
         },
     });
@@ -235,6 +285,7 @@ export default function TimedGameScreen() {
         setSelectedCategory(category);
         setIsReady(true);
         startNextWord(category);
+        resetPowerUps({ hint: { count: 3 }, bomb: { count: 2 }, freeze: { count: 2 }, skip: { count: 2 }, lightning: { count: 2 }, risk: { count: 2 } });
         startTimer();
     };
 
@@ -242,35 +293,25 @@ export default function TimedGameScreen() {
         if (timerInterval.current) clearInterval(timerInterval.current);
         timerProgress.value = 1;
         setTimeLeft(GAME_TIME);
+        resetPowerUps({ hint: { count: 3 }, bomb: { count: 2 }, freeze: { count: 2 }, skip: { count: 2 }, lightning: { count: 2 }, risk: { count: 2 } });
+
         setScore(0);
         setSolvedCount(0);
         setCombo(0);
         feverValue.value = 0;
         setIsGameOver(false);
         setIsReady(false);
-        // Resetting state via setCounts or reset if usePowerUps supported it
-        // Since usePowerUps is a hook with internal state, we should probably add a reset mechanism there if needed
-        // but for now we'll assumes the component unmounts or we can manually reset counts if we expose a setter.
-        // Actually, survival.tsx refactor already happened, let's see how it handled reset.
+        setIsSessionFairPlay(true);
+        setSessionBackgroundStats({ count: 0, totalTime: 0 });
     };
 
-    const animatedBgStyle = useAnimatedStyle(() => ({
-        backgroundColor: interpolateColor(
-            feverValue.value,
-            [0, 1],
-            [BLITZ_BG, FEVER_BG]
-        )
-    }));
 
     const timerStyle = useAnimatedStyle(() => ({
         width: `${timerProgress.value * 100}%`,
         backgroundColor: isFrozen ? '#4FC3F7' : (timeLeft < 10 ? '#ff4d4d' : BLITZ_ACCENT)
     }));
 
-    const comboIndicatorStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: comboScale.value }],
-        opacity: comboScale.value > 0 ? 1 : 0
-    }));
+
 
 
     return (
@@ -309,10 +350,37 @@ export default function TimedGameScreen() {
             </View>
 
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-                {/* Combo Indicator */}
-
-
-
+                {revealedWord && (
+                    <Animated.View
+                        entering={FadeInDown.duration(600).springify().damping(12)}
+                        exiting={FadeOutUp.duration(400)}
+                        style={{
+                            position: 'absolute',
+                            zIndex: 10,
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            paddingHorizontal: 32,
+                            paddingVertical: 16,
+                            borderRadius: 16,
+                            borderWidth: 2,
+                            borderColor: BLITZ_ACCENT,
+                            shadowColor: BLITZ_ACCENT,
+                            shadowOffset: { width: 0, height: 0 },
+                            shadowOpacity: 0.8,
+                            shadowRadius: 20,
+                            elevation: 10,
+                        }}
+                    >
+                        <Animated.Text style={{
+                            color: '#fff',
+                            fontSize: 36,
+                            fontWeight: '900',
+                            letterSpacing: 6,
+                            textTransform: 'uppercase',
+                        }}>
+                            {revealedWord}
+                        </Animated.Text>
+                    </Animated.View>
+                )}
                 <Grid key={gameId} grid={grid} currentRow={currentRow} currentGuess={currentGuess} />
             </View>
 
@@ -333,6 +401,8 @@ export default function TimedGameScreen() {
                 word={currentWord}
                 guesses={score}
                 extraData={solvedCount}
+                isFairPlay={isSessionFairPlay}
+                backgroundStats={sessionBackgroundStats}
                 onRestart={resetTimedGame}
                 onHome={() => router.replace('/')}
                 mode="timed"
@@ -340,6 +410,3 @@ export default function TimedGameScreen() {
         </GameLayout>
     );
 }
-
-
-

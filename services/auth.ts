@@ -9,6 +9,9 @@ export const signUp = async (email: string, password: string) => {
   const result = await supabase.auth.signUp({
     email: email,
     password: password,
+    options: {
+      emailRedirectTo: Linking.createURL(""),
+    },
   });
   return result;
 };
@@ -27,7 +30,9 @@ export const signOut = async () => {
 };
 
 export const resetPasswordForEmail = async (email: string) => {
-  const result = await supabase.auth.resetPasswordForEmail(email);
+  const result = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: Linking.createURL(""),
+  });
   return result;
 };
 
@@ -39,7 +44,7 @@ export const updateUserPassword = async (password: string) => {
 };
 
 export const signInWithGoogle = async () => {
-  const redirectTo = Linking.createURL("auth-callback");
+  const redirectTo = Linking.createURL("");
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -56,8 +61,6 @@ export const signInWithGoogle = async () => {
   if (res.type === "success") {
     const { url } = res;
 
-    // Supabase redirects with tokens in the hash fragment (#access_token=xxx)
-    // expo-linking might not parse hash as query params depending on the version
     const extractParams = (url: string) => {
       const parts = url.split("#");
       if (parts.length < 2) return Linking.parse(url).queryParams || {};

@@ -1,116 +1,205 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
-import { ScrollView, Text, View, Pressable, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import { useResponsive } from '../../hooks/useResponsive';
-import { useAuth } from '../../hooks/useAuth';
-import { statsService } from '../../services/statsService';
-import { ACCENTS, TabId } from '../../components/Stats/types';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import ClassicStats from '../../components/Stats/ClassicStats';
-import BlitzStats from '../../components/Stats/BlitzStats';
-import ClimbStats from '../../components/Stats/ClimbStats';
-import MultiStats from '../../components/Stats/MultiStats';
+import ClimbStats from '@/components/Stats/ClimbStats';
+import MultiStats from '@/components/Stats/MultiStats';
+import SurvivalStats from '@/components/Stats/SurvivalStats';
 import BlindStats from '../../components/Stats/BlindStats';
+import BlitzStats from '../../components/Stats/BlitzStats';
+import ClassicStats from '../../components/Stats/ClassicStats';
 import DailyStats from '../../components/Stats/DailyStats';
-import SurvivalStats from '../../components/Stats/SurvivalStats';
+import { ACCENTS, TabId } from '../../components/Stats/types';
+import { useAuth } from '../../hooks/useAuth';
+import { useResponsive } from '../../hooks/useResponsive';
+import { statsService } from '../../services/statsService';
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'classic', label: 'Klasik', icon: 'grid' },
-  { id: 'daily', label: 'Günlük', icon: 'calendar' },
-  { id: 'blitz', label: 'Blitz', icon: 'flash' },
-  { id: 'survival', label: 'Hayatta Kalma', icon: 'heart' },
-  { id: 'climb', label: 'Tırmanış', icon: 'trending-up' },
-  { id: 'multi', label: 'Çoklu', icon: 'layers' },
-  { id: 'blind', label: 'Kör', icon: 'eye-off' },
+  { id: 'classic', label: 'Klasik', icon: 'grid-outline' },
+  { id: 'blitz', label: 'Blitz', icon: 'flash-outline' },
+  { id: 'daily', label: 'Günlük', icon: 'calendar-outline' },
+  { id: 'blind', label: 'Kör Mod', icon: 'eye-off-outline' },
+  { id: 'multi', label: 'Çoklu', icon: 'layers-outline' },
+  { id: 'survival', label: 'Survival', icon: 'heart-outline' },
+  { id: 'climb', label: 'Tırmanış', icon: 'trending-up-outline' },
 ];
 
 export default function StatsScreen() {
-  const { moderateScale, wp, hp } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const { moderateScale, wp, spacing } = useResponsive();
+  const screenWidth = useMemo(() => wp(100), [wp]);
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('classic');
+  const [tab, setTab] = useState<TabId>('classic');
+  const accent = ACCENTS[tab];
+  const [tabIndex, setTabIndex] = useState(0);
 
-  const { data: stats, isLoading, refetch } = useQuery({
-    queryKey: ['stats', user?.id, activeTab],
-    queryFn: () => statsService.getModeStats(user!.id, activeTab),
+  // Animation stuff
+  const translateX = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // React Query ile verileri çek
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['stats', user?.id, tab],
+    queryFn: () => statsService.getModeStats(user!.id, tab),
     enabled: !!user,
     staleTime: 1000 * 60 * 5,
   });
+  useEffect(() => {
+    const index = TABS.findIndex(m => m.id === tab);
+    if (index !== -1 && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        x: Math.max(0, index * moderateScale(120) - spacing.xl * 2),
+        animated: true,
+      });
+    }
+  }, [tab, moderateScale, spacing.xl]);
 
-  const activeColor = ACCENTS[activeTab] || '#fff';
+  const handleTabPress = (id: TabId, index: number) => {
+    if (tab === id) return;
+    setTab(id);
+    setTabIndex(index);
+    translateX.value = 0;
+    opacity.value = withSpring(1);
+  };
+
+  const navigateToTab = useCallback((index: number) => {
+    setTabIndex(index);
+    setTab(TABS[index].id);
+    translateX.value = 0;
+    opacity.value = withTiming(1, { duration: 400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
+  }, []);
+
+  const swipeGesture = useMemo(() => Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      opacity.value = 1 - Math.abs(e.translationX) / screenWidth;
+    })
+    .onEnd((e) => {
+      const config = { duration: 400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
+      if (e.translationX < -screenWidth * 0.25 || e.velocityX < -500) {
+        // Sola kaydır -> İleri
+        if (tabIndex < TABS.length - 1) {
+          translateX.value = withTiming(-screenWidth, config);
+          runOnJS(navigateToTab)(tabIndex + 1);
+        } else {
+          translateX.value = withTiming(0, config);
+        }
+      } else if (e.translationX > screenWidth * 0.25 || e.velocityX > 500) {
+        // Sağa kaydır -> Geri
+        if (tabIndex > 0) {
+          translateX.value = withTiming(screenWidth, config);
+          runOnJS(navigateToTab)(tabIndex - 1);
+        } else {
+          translateX.value = withTiming(0, config);
+        }
+      } else {
+        translateX.value = withTiming(0, config);
+        opacity.value = withTiming(1, config);
+      }
+    }), [tabIndex, screenWidth, navigateToTab]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: opacity.value,
+  }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <LinearGradient
-        colors={[`${activeColor}15`, '#000', '#000']}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-      />
-      
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: wp(5), paddingTop: moderateScale(10), marginBottom: 20 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
-              <Text style={{ color: '#fff', fontSize: moderateScale(32), fontWeight: '900', letterSpacing: -1 }}>İstatistikler</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(11), fontWeight: '700', marginTop: 2 }}>ANALİZ MERKEZİ</Text>
-            </View>
-            <Pressable 
-              onPress={() => refetch()}
-              style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: moderateScale(10), borderRadius: 15 }}
-            >
-              <Ionicons name="refresh" size={20} color={activeColor} />
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={{ marginBottom: 24 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: wp(5), gap: 10 }}>
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const tabColor = ACCENTS[tab.id as TabId];
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
+      <View style={{ flex: 1 }}>
+        <View style={{
+          marginTop: moderateScale(30),
+          marginBottom: moderateScale(10),
+        }}>
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              gap: wp(1),
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 5,
+              paddingHorizontal: wp(4)
+            }}
+          >
+            {TABS.map((t, index) => {
+              const isActive = tab === t.id;
+              const tabAccent = ACCENTS[t.id];
               return (
                 <Pressable
-                  key={tab.id}
-                  onPress={() => setActiveTab(tab.id as TabId)}
+                  key={t.id}
+                  onPress={() => handleTabPress(t.id, index)}
                   style={{
-                    backgroundColor: isActive ? tabColor : 'rgba(255,255,255,0.03)',
-                    paddingHorizontal: 18,
-                    paddingVertical: 10,
-                    borderRadius: 16,
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 8,
+                    paddingVertical: moderateScale(10),
+                    paddingHorizontal: moderateScale(18),
+                    borderRadius: 20,
+                    backgroundColor: isActive ? `${tabAccent}15` : 'transparent',
                     borderWidth: 1,
-                    borderColor: isActive ? 'transparent' : 'rgba(255,255,255,0.05)',
+                    borderColor: isActive ? `${tabAccent}50` : 'rgba(255,255,255,0.1)',
                   }}
                 >
-                  <Ionicons name={(isActive ? tab.icon : tab.icon + '-outline') as any} size={16} color={isActive ? '#000' : 'rgba(255,255,255,0.4)'} />
-                  <Text style={{ color: isActive ? '#000' : 'rgba(255,255,255,0.4)', fontSize: moderateScale(11), fontWeight: '800' }}>{tab.label.toUpperCase()}</Text>
+                  <Ionicons
+                    name={t.icon as any}
+                    size={moderateScale(16)}
+                    color={isActive ? tabAccent : 'rgba(255,255,255,0.2)'}
+                  />
+                  <Text
+                    style={{
+                      color: isActive ? '#fff' : 'rgba(255,255,255,0.2)',
+                      fontWeight: isActive ? '900' : '600',
+                      fontSize: moderateScale(14),
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {t.label}
+                  </Text>
                 </Pressable>
               );
             })}
           </ScrollView>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: wp(5), paddingBottom: hp(10) }}>
-          {isLoading ? (
-             <View style={{ flex: 1, height: 300, justifyContent: 'center', alignItems: 'center' }}>
-               <ActivityIndicator color={activeColor} />
-             </View>
-          ) : (
-            <>
-              {activeTab === 'classic' && <ClassicStats data={stats} accent={activeColor} />}
-              {activeTab === 'blitz' && <BlitzStats data={stats} accent={activeColor} />}
-              {activeTab === 'climb' && <ClimbStats data={stats} accent={activeColor} />}
-              {activeTab === 'multi' && <MultiStats data={stats} accent={activeColor} />}
-              {activeTab === 'blind' && <BlindStats data={stats} accent={activeColor} />}
-              {activeTab === 'daily' && <DailyStats data={stats} accent={activeColor} />}
-              {activeTab === 'survival' && <SurvivalStats data={stats} accent={activeColor} />}
-            </>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+        <GestureDetector gesture={swipeGesture}>
+          <Animated.ScrollView
+            style={[{ flex: 1 }, animatedStyle]}
+            contentContainerStyle={{
+              padding: wp(5),
+              paddingTop: moderateScale(16),
+              paddingBottom: insets.bottom + 80,
+              gap: 16,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            {isLoading ? (
+              <View style={{ flex: 1, paddingVertical: 100, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator color={accent} size="large" />
+                <Text style={{ color: 'rgba(255,255,255,0.4)', marginTop: 12, fontWeight: '600' }}>
+                  Veriler Getiriliyor...
+                </Text>
+              </View>
+            ) : (
+              <>
+                {tab === 'classic' && <ClassicStats accent={accent} data={stats} />}
+                {tab === 'blitz' && <BlitzStats accent={accent} data={stats} />}
+                {tab === 'daily' && <DailyStats accent={accent} data={stats} />}
+                {tab === 'blind' && <BlindStats accent={accent} data={stats} />}
+                {tab === 'multi' && <MultiStats accent={accent} data={stats} />}
+                {tab === 'survival' && <SurvivalStats accent={accent} data={stats} />}
+                {tab === 'climb' && <ClimbStats accent={accent} data={stats} />}
+              </>
+            )}
+          </Animated.ScrollView>
+        </GestureDetector>
+      </View>
+    </GestureHandlerRootView>
   );
 }

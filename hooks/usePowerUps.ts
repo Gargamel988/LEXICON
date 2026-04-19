@@ -12,7 +12,7 @@ export type PowerUpStates = Partial<Record<PowerUpKey, PowerUpState>>;
 export const usePowerUps = (
   keys: PowerUpKey[],
   initialStates: PowerUpStates,
-  onUse: (key: PowerUpKey) => void
+  onUse: (key: PowerUpKey) => boolean | void | 'toggle'
 ) => {
   const [states, setStates] = useState<PowerUpStates>(initialStates);
 
@@ -33,21 +33,32 @@ export const usePowerUps = (
         [key]: { 
           ...prev[key]!, 
           isActive: !prev[key]!.isActive,
-          // Special case: for 'risk', we also toggle count between 1 and 0 for UI consistency if needed,
-          // but isActive is the primary driver.
           count: !prev[key]!.isActive ? 1 : 0
         },
       }));
     } else {
       // Count-based logic
-      if (current.count <= 0) return;
+      if (current.count <= 0 && !current.isActive) return;
+
+      // Special case: if onUse returns exactly 'toggle', we just flip isActive
+      // and don't decrement the count here.
+      const result = onUse(key);
+      
+      if (result === 'toggle') {
+        setStates(prev => ({
+          ...prev,
+          [key]: { ...prev[key]!, isActive: !prev[key]!.isActive }
+        }));
+        return;
+      }
+
+      if (result === false) return;
+
       setStates(prev => ({
         ...prev,
-        [key]: { ...prev[key]!, count: Math.max(0, prev[key]!.count - 1) },
+        [key]: { ...prev[key]!, count: Math.max(0, prev[key]!.count - 1), isActive: false },
       }));
     }
-
-    onUse(key);
   }, [states, onUse]);
 
   const configs: PowerUpConfig[] = keys.map(key => {

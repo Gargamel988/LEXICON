@@ -7,6 +7,8 @@ import Animated, {
   withDelay,
   withSequence,
   withTiming,
+  ZoomIn,
+  ZoomOut,
 } from 'react-native-reanimated';
 import { CellStatus } from '../../types';
 
@@ -100,32 +102,37 @@ const Cell = ({ char, status, index, size = 58, height, isBlind }: CellProps) =>
 
   return (
     <Animated.View
-      style={[
-        {
-          width: size,
-          height: cellHeight,
-          borderWidth: size > 50 ? 2 : 1.5,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: Math.max(4, size / 10),
-        },
-        animatedStyle,
-        bgStyle
-      ]}
+      entering={ZoomIn.duration(600).delay(index * 35)}
+      exiting={ZoomOut.duration(400)}
     >
-      <Animated.Text
+      <Animated.View
         style={[
           {
-            color: '#fff',
-            fontSize: size * 0.48,
-            fontWeight: '900',
-            lineHeight: cellHeight,
+            width: size,
+            height: cellHeight,
+            borderWidth: size > 50 ? 2 : 1.5,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: Math.max(4, size / 10),
           },
-          textStyle
+          animatedStyle,
+          bgStyle
         ]}
       >
-        {char || ''}
-      </Animated.Text>
+        <Animated.Text
+          style={[
+            {
+              color: '#fff',
+              fontSize: size * 0.48,
+              fontWeight: '900',
+              lineHeight: cellHeight,
+            },
+            textStyle
+          ]}
+        >
+          {char || ''}
+        </Animated.Text>
+      </Animated.View>
     </Animated.View>
   );
 };

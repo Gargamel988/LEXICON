@@ -39,7 +39,6 @@ export const useAuth = () => {
       signUp(email, password),
     onSuccess: (result) => {
       if (result.error) {
-        
         Toast.show({
           type: "error",
           text1: "Kayıt Hatası",
@@ -51,7 +50,6 @@ export const useAuth = () => {
         return;
       }
 
-      
       if (!result.data?.session) {
         router.replace({
           pathname: "/(auth)/verify",
@@ -118,7 +116,6 @@ export const useAuth = () => {
       router.replace("/(tabs)");
     },
     onError: (error: any) => {
-      console.log("Lexicon Error:", error.message);
       Toast.show({
         type: "error",
         text1: "Google Hatası",

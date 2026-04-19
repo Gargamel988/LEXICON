@@ -7,7 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DailyCard from '../../components/Home/DailyCard';
 import ModeCard from '../../components/Home/ModeCard';
+import AuthWarningModal from '../../components/modal/AuthWarningModal';
 import Colors from '../../constants/Colors';
+import { useAuth } from '../../hooks/useAuth';
 
 type GameMode = {
   id: string;
@@ -25,18 +27,27 @@ const GAME_MODES: GameMode[] = [
   { id: 'survival', title: 'Hayatta Kal', description: 'Canların bitene kadar hayatta kal.', icon: 'heart-outline', link: '/survival' },
   { id: 'coklu', title: 'Çoklu', description: 'Aynı anda birden fazla kelime.', icon: 'layers-outline', link: '/multi' },
   { id: 'tirma', title: 'Tırmanış', description: 'Zirveye giden yol! Giderek zorlaşan kelimeler.', icon: 'trending-up-outline', link: '/climb' },
+  { id: 'lobi', title: 'Çok Oyunculu', description: 'Arkadaşlarınla oda kur; 1vs1 Battle veya Bomba Kimde oyna!', icon: 'people-outline', link: '/lobby', },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [isAuthWarningVisible, setIsAuthWarningVisible] = React.useState(false);
+  const [pendingModeLink, setPendingModeLink] = React.useState<string | null>(null);
 
   const handleModePress = (id: string) => {
-    
-    GAME_MODES.map((mode) => {
-      if (mode.id === id) {
-        router.push(mode.link as any);
-      }
-    })
+    const selectedMode = GAME_MODES.find(m => m.id === id);
+    if (!selectedMode) return;
+
+    // Klasik mod dışındaki modlar için giriş kontrolü
+    if (id !== 'klasik' && !user) {
+      setPendingModeLink(selectedMode.link);
+      setIsAuthWarningVisible(true);
+      return;
+    }
+
+    router.push(selectedMode.link as any);
   };
 
   return (
@@ -97,6 +108,16 @@ export default function HomeScreen() {
 
 
       </ScrollView>
+
+      <AuthWarningModal
+        isVisible={isAuthWarningVisible}
+        onClose={() => setIsAuthWarningVisible(false)}
+        onContinueWithoutLogin={() => {
+          if (pendingModeLink) {
+            router.push(pendingModeLink as any);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }

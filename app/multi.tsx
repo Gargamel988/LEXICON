@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Text, View, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import GameHeader from '../components/Game/GameHeader';
-import PowerUpToolbar, { PowerUpConfig } from '../components/Game/PowerUpToolbar';
+import PowerUpToolbar from '../components/Game/PowerUpToolbar';
 import MultiGrid from '../components/Grid/MultiGrid';
 import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
@@ -16,9 +17,10 @@ import { usePowerUps } from '../hooks/usePowerUps';
 import { useResponsive } from '../hooks/useResponsive';
 import { statsService } from '../services/statsService';
 import { getWordByCategory } from '../services/wordService';
+import Colors from '../constants/Colors';
 
-const MULTI_ACCENT = '#9c27b0'; // Purple for Multi-Mode
-const MULTI_BG = '#0a0a0c';
+const MULTI_ACCENT = Colors.modes.multi.accent;
+const MULTI_BG = Colors.modes.multi.background;
 
 // Points configuration
 const BASE_POINTS = 500;
@@ -46,22 +48,26 @@ export default function MultiModeScreen() {
     bonus?: number;
   }>({ status: 'win', guesses: 0, isVisible: false, words: [] });
 
+  const [startTime, setStartTime] = useState<number | null>(null);
+
   const [score, setScore] = useState(0);
   const [revealedInfo, setRevealedInfo] = useState<string | null>(null);
   const [comboText, setComboText] = useState<string | null>(null);
 
   // Result mutation for stats
   const saveResultMutation = useMutation({
-    mutationFn: (data: any) => {
-      console.log("[MULTI] Saving result:", data);
-      return statsService.saveGameResult(user!.id, data);
-    },
+    mutationFn: (data: any) => statsService.saveGameResult(user!.id, data),
     onSuccess: (res) => {
-      console.log("[MULTI] Result saved successfully:", res);
+      if (res && !res.success && res.reason === 'fair_play_violation') {
+        Toast.show({
+          type: 'info',
+          text1: 'Adil Oyun Uyarısı',
+          text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+          position: 'top',
+          visibilityTime: 4000
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
-    },
-    onError: (err) => {
-      console.error("[MULTI] Error saving result:", err);
     }
   });
 
@@ -82,6 +88,7 @@ export default function MultiModeScreen() {
     addHintToGrid,
     addLightning,
     useMultiBomb,
+    useMultiAnalysis,
   } = useMultiWordGame({
     words,
     wordLength,
@@ -108,7 +115,8 @@ export default function MultiModeScreen() {
           solved_at_row: stats.solvedAtRow,
           category,
           word_count: wordCount,
-          score: score + bonusPoints
+          score: score + bonusPoints,
+          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
         });
       }
       setTimeout(() => {
@@ -129,7 +137,8 @@ export default function MultiModeScreen() {
           attempts: 9,
           solved_at_row: stats.solvedAtRow,
           category,
-          word_count: wordCount
+          word_count: wordCount,
+          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
         });
       }
       setTimeout(() => {
@@ -139,37 +148,29 @@ export default function MultiModeScreen() {
   });
 
   const { configs: powerUpConfigs, resetPowerUps } = usePowerUps(
-    ['hint', 'lightning', 'bomb', 'scan', 'bridge'],
+    ['hint', 'lightning', 'bomb', 'analysis', 'bridge'],
     {
-      hint: { count: 1 },
-      lightning: { count: 1 },
-      bomb: { count: 1 },
-      scan: { count: 1 },
-      bridge: { count: 1 }
+      hint: { count: 3 },
+      lightning: { count: 2 },
+      bomb: { count: 3 },
+      analysis: { count: 2 },
+      bridge: { count: 2 }
     },
     (key) => {
       if (key === 'hint') handleHint();
       if (key === 'lightning') handleLightning();
       if (key === 'bomb') handleBomb();
-      if (key === 'scan') handleScan();
+      if (key === 'analysis') handleAnalysis();
       if (key === 'bridge') handleBridge();
     }
   );
 
   const solvedCount = solvedStates.filter(s => s).length;
 
-  // Use a ref to stabilize the handleKeyPress callback
-  const handleKeyPressRef = useRef(handleKeyPress);
-  handleKeyPressRef.current = handleKeyPress;
-
-  const stableHandleKeyPress = useCallback((key: string) => {
-    handleKeyPressRef.current(key);
-  }, []);
-
   const startNewGame = (selectedCategory: string, selectedLength: number, selectedCount: number = 4) => {
     setIsStarting(true);
     setScore(0);
-    resetPowerUps({ hint: { count: 1 }, lightning: { count: 1 }, bomb: { count: 1 }, scan: { count: 1 }, bridge: { count: 1 } });
+    resetPowerUps({ hint: { count: 3 }, lightning: { count: 2 }, bomb: { count: 3 }, analysis: { count: 2 }, bridge: { count: 2 } });
     setRevealedInfo(null);
     setComboText(null);
 
@@ -195,6 +196,7 @@ export default function MultiModeScreen() {
       setIsStarting(false);
       setIsSettingsVisible(false);
       setResult(prev => ({ ...prev, isVisible: false }));
+      setStartTime(Date.now());
     }, 100);
   };
 
@@ -243,24 +245,16 @@ export default function MultiModeScreen() {
     }
   };
 
-  const handleScan = () => {
-    const unsolved = words.filter((_, i) => !solvedStates[i]);
-    if (unsolved.length === 0) return;
+  const handleAnalysis = () => {
+    if (currentGuess.length !== wordLength) return false;
 
-    // Find common letters
-    const common = unsolved.reduce((acc, word) => {
-      const chars = word.toUpperCase().split("");
-      return acc.filter(c => chars.includes(c));
-    }, unsolved[0].toUpperCase().split(""));
-
-    const uniqueCommon = [...new Set(common)];
-    if (uniqueCommon.length > 0) {
-      const letter = uniqueCommon[0];
-      setRevealedInfo(`Tarama: Ortak Harf "${letter}"`);
-    } else {
-      setRevealedInfo("Tarama: Ortak harf bulunamadı!");
+    const success = useMultiAnalysis();
+    if (success) {
+      setRevealedInfo("Analiz: Kelimeler tarandı!");
+      setTimeout(() => setRevealedInfo(null), 2000);
+      return true;
     }
-    setTimeout(() => setRevealedInfo(null), 2500);
+    return false;
   };
 
   const handleBridge = () => {
@@ -395,7 +389,7 @@ export default function MultiModeScreen() {
 
       {/* Keyboard */}
       <Keyboard
-        onKeyPress={stableHandleKeyPress}
+        onKeyPress={handleKeyPress}
         letterStatusesArray={letterStatusesArray}
       />
 
@@ -414,11 +408,10 @@ export default function MultiModeScreen() {
       <ResultModal
         isVisible={result.isVisible}
         status={result.status}
-        word={result.words.join(', ')} // Show all words in results
+        word={result.words.join(' • ')} // Using separator for cleaner look
         guesses={result.guesses}
         mode="multi"
         extraData={`${solvedCount}/${wordCount}`}
-        allGrids={grids}
         onRestart={() => setIsSettingsVisible(true)}
         onHome={() => router.replace('/(tabs)')}
       />

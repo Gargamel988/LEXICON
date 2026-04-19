@@ -1,68 +1,83 @@
+import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Tabs } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../../constants/Colors';
+import AuthRequiredModal from '../../components/modal/AuthRequiredModal';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function TabLayout() {
+  const [isAuthModalVisible, setIsAuthModalVisible] = React.useState(false);
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: '#0f0f0f',
-          borderTopWidth: 1,
-          borderTopColor: '#1c1c1e',
-        },
-      }}
-      tabBar={(props) => <CustomTabBar {...props} />}
+    <>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            position: 'absolute',
+            backgroundColor: '#0f0f0f',
+            borderTopWidth: 1,
+            borderTopColor: '#1c1c1e',
+          },
+        }}
+        tabBar={(props) => (
+          <CustomTabBar 
+            {...props} 
+            onShowAuthModal={() => setIsAuthModalVisible(true)} 
+          />
+        )}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'ANA SAYFA',
+            tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="stats"
+          options={{
+            title: 'İSTATİSTİK',
+            tabBarIcon: ({ color }) => <Ionicons name="bar-chart" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="leaderboard"
+          options={{
+            title: 'SIRALAMA',
+            tabBarIcon: ({ color }) => <Ionicons name="stats-chart" size={24} color={color} />,
+          }}
+        />
 
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'ANA SAYFA',
-          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
-        }}
+        <Tabs.Screen
+          name="shop"
+          options={{
+            title: 'MAĞAZA',
+            tabBarIcon: ({ color }) => <Ionicons name="bag-handle" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'PROFİL',
+            tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
+          }}
+        />
+      </Tabs>
+      <AuthRequiredModal 
+        isVisible={isAuthModalVisible} 
+        onClose={() => setIsAuthModalVisible(false)} 
       />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: 'İSTATİSTİK',
-          tabBarIcon: ({ color }) => <Ionicons name="bar-chart" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: 'SIRALAMA',
-          tabBarIcon: ({ color }) => <Ionicons name="stats-chart" size={24} color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="shop"
-        options={{
-          title: 'MAĞAZA',
-          tabBarIcon: ({ color }) => <Ionicons name="bag-handle" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'PROFİL',
-          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
-        }}
-      />
-
-    </Tabs>
+    </>
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function CustomTabBar({ state, descriptors, navigation, onShowAuthModal }: any) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   return (
     <View style={{
@@ -81,6 +96,15 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         const isFocused = state.index === index;
 
         const onPress = () => {
+          // Korumalı rotalar listesi
+          const protectedRoutes = ['stats', 'leaderboard', 'shop', 'profile'];
+          const isProtectedRoute = protectedRoutes.includes(route.name);
+
+          if (isProtectedRoute && !user) {
+            onShowAuthModal();
+            return;
+          }
+
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
@@ -88,7 +112,6 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           });
 
           if (!isFocused && !event.defaultPrevented) {
-            
             navigation.navigate(route.name);
           }
         };

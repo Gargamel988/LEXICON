@@ -1,11 +1,11 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
-import { CellData } from '../../types';
+import { CellData, Row } from '../../types';
 import Grid from './Grid';
 
 interface MultiGridProps {
-  grids: CellData[][][];
+  grids: Row[][];
   currentRow: number;
   currentGuess: string;
   solvedStates: boolean[];
@@ -49,7 +49,6 @@ const MultiGrid: React.FC<MultiGridProps> = React.memo(({ grids, currentRow, cur
               opacity: isSolved ? 0.65 : 1,
               backgroundColor: isSolved ? 'rgba(76, 175, 80, 0.08)' : 'rgba(142, 36, 170, 0.03)',
               marginBottom: 15,
-              // Premium touch: subtle shadow/glow
               shadowColor: shadowColor,
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 1,
@@ -58,10 +57,7 @@ const MultiGrid: React.FC<MultiGridProps> = React.memo(({ grids, currentRow, cur
             }}
           >
             <Grid
-              grid={Array.isArray(grid) ? grid.map((row: any, i: number) => ({
-                id: `grid-${index}-row-${i}`,
-                cells: Array.isArray(row) ? row : []
-              })) : []}
+              grid={grid}
               currentRow={currentRow}
               currentGuess={currentGuess}
               maxGridWidth={gridWidth - 20}

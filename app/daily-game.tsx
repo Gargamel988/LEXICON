@@ -1,18 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 import GameHeader from '../components/Game/GameHeader';
+import PowerUpToolbar from '../components/Game/PowerUpToolbar';
 import Grid from '../components/Grid/Grid';
 import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
 import DailyResultModal from '../components/modal/DailyResultModal';
 import { useDailyGame } from '../hooks/useDailyGame';
+import { usePowerUps } from '../hooks/usePowerUps';
 import { useWordGame } from '../hooks/useWordGame';
+import Colors from '../constants/Colors';
 
-const DAILY_ACCENT = '#4cd964';
-const DAILY_BG = '#121212';
+const DAILY_ACCENT = Colors.modes.daily.accent;
+const DAILY_BG = Colors.modes.daily.background;
 
 export default function DailyGameScreen() {
   const router = useRouter();
@@ -37,33 +41,79 @@ export default function DailyGameScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const { grid, currentRow, currentGuess, handleKeyPress, letterStatuses, isGameOver, setIsGameOver, resetGameStates } = useWordGame({
+  const { grid, currentRow, currentGuess, handleKeyPress, letterStatuses, isGameOver, setIsGameOver, resetGameStates, getHint, useBomb } = useWordGame({
     word: dailyWord || '',
     wordLength: dailyWord?.length || 5,
-    onSuccess: async () => {
-      const attempts = currentRow + 1;
-
-      const resultData = { attempts, duration_seconds: elapsedSeconds, is_winner: true, streak: streak + 1 };
+    onSuccess: async (points: number, attempts: number, fairPlayData: { isFairPlay: boolean, backgroundCount: number, backgroundTotalTime: number }) => {
+      const resultData = { 
+        attempts, 
+        duration_seconds: elapsedSeconds, 
+        is_winner: true, 
+        streak: streak + 1,
+        isFairPlay: fairPlayData?.isFairPlay,
+        backgroundStats: {
+          count: fairPlayData?.backgroundCount ?? 0,
+          totalTime: fairPlayData?.backgroundTotalTime ?? 0
+        }
+      };
       setFinalData(resultData);
       setIsResultVisible(true);
       setIsGameOver(true);
 
       try {
-        await submitResult({ attempts, duration: elapsedSeconds, isWinner: true });
+        const res = await submitResult({ 
+          attempts, 
+          duration: elapsedSeconds, 
+          isWinner: true,
+          is_fair_play: fairPlayData?.isFairPlay 
+        });
+
+        if (res && !res.success && res.reason === 'fair_play_violation') {
+          Toast.show({
+            type: 'info',
+            text1: 'Adil Oyun Uyarısı',
+            text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+            position: 'top',
+            visibilityTime: 4000
+          });
+        }
       } catch (e) {
         console.error('Lexicon: Submit error', e);
       }
     },
-    onFail: async () => {
-      const attempts = 6;
-
-      const resultData = { attempts, duration_seconds: elapsedSeconds, is_winner: false, streak: 0 };
+    onFail: async (attempts: number, fairPlayData: { isFairPlay: boolean, backgroundCount: number, backgroundTotalTime: number }) => {
+      const resultData = { 
+        attempts, 
+        duration_seconds: elapsedSeconds, 
+        is_winner: false, 
+        streak: 0,
+        isFairPlay: fairPlayData?.isFairPlay,
+        backgroundStats: {
+          count: fairPlayData?.backgroundCount ?? 0,
+          totalTime: fairPlayData?.backgroundTotalTime ?? 0
+        }
+      };
       setFinalData(resultData);
       setIsResultVisible(true);
       setIsGameOver(true);
 
       try {
-        await submitResult({ attempts, duration: elapsedSeconds, isWinner: false });
+        const res = await submitResult({ 
+          attempts, 
+          duration: elapsedSeconds, 
+          isWinner: false,
+          is_fair_play: fairPlayData?.isFairPlay 
+        });
+
+        if (res && !res.success && res.reason === 'fair_play_violation') {
+          Toast.show({
+            type: 'info',
+            text1: 'Adil Oyun Uyarısı',
+            text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+            position: 'top',
+            visibilityTime: 4000
+          });
+        }
       } catch (e) {
         console.error('Lexicon: Submit error', e);
       }
@@ -74,6 +124,21 @@ export default function DailyGameScreen() {
     if (dailyWord) resetGameStates(6, dailyWord.length);
   }, [dailyWord]);
 
+  const { configs: powerUpConfigs } = usePowerUps(['hint', 'bomb'], {
+    hint: { count: 1 },
+    bomb: { count: 1 }
+  }, (key) => {
+    if (key === 'hint') {
+      const success = getHint();
+      return success !== false;
+    }
+    if (key === 'bomb') {
+      const success = useBomb();
+      return success !== false;
+    }
+    return false;
+  });
+
   useEffect(() => {
     if (hasPlayed && playData) {
       // playData artık game_results tablosundan geliyor
@@ -81,7 +146,8 @@ export default function DailyGameScreen() {
         attempts: playData.attempts,
         duration_seconds: playData.duration_seconds,
         is_winner: playData.is_winner,
-        rank: playData.rank // Eğer veritabanında varsa
+        rank: playData.rank,
+        isFairPlay: playData.is_fair_play ?? true
       });
       setIsResultVisible(true);
       setIsGameOver(true);
@@ -143,9 +209,11 @@ export default function DailyGameScreen() {
       />
 
       {/* ── Grid ── */}
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 8 }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Grid grid={grid} currentRow={currentRow} currentGuess={currentGuess} />
       </View>
+
+      <PowerUpToolbar configs={powerUpConfigs} />
 
       {/* ── Klavye ── */}
       <Keyboard onKeyPress={handleKeyPress} letterStatuses={letterStatuses} />
@@ -157,10 +225,11 @@ export default function DailyGameScreen() {
         word={dailyWord}
         rank={finalData?.rank}
         streak={streak || 0}
-        attempts={finalData?.attempts}
         duration={finalData?.duration_seconds || finalData?.duration}
         timeLeft={timeLeft}
-        guesses={(grid as any).map((r: any) => r.cells)}
+        guesses={(grid as any).map((r: any) => ({ cells: r.cells }))} // Adjusting to match expected structure if needed, but let's see
+        isFairPlay={finalData?.isFairPlay}
+        backgroundStats={finalData?.backgroundStats}
         onClose={() => router.replace('/(tabs)' as any)}
       />
     </GameLayout>

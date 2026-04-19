@@ -21,6 +21,8 @@ interface DailyResultModalProps {
   timeLeft: string;
   onClose: () => void;
   guesses?: any[][];
+  isFairPlay?: boolean;
+  backgroundStats?: { count: number; totalTime: number };
 }
 
 const { height } = Dimensions.get('window');
@@ -35,7 +37,9 @@ const DailyResultModal: React.FC<DailyResultModalProps> = ({
   duration,
   timeLeft,
   onClose,
-  guesses
+  guesses,
+  isFairPlay = true,
+  backgroundStats
 }) => {
   const isWin = status === 'win';
   const translateY = useSharedValue(height);
@@ -77,6 +81,7 @@ const DailyResultModal: React.FC<DailyResultModalProps> = ({
     if (isWin && rank) message += `Sıra: #${rank}\n`;
     if (streak) message += `Seri: ${streak}🔥\n\n`;
     if (emojiGrid) message += `${emojiGrid}\n\n`;
+    if (!isFairPlay) message += `⚠️ Bu skor yardımcı araçlarla alınmış olabilir.\n`;
     message += `https://lexicon.game`;
 
     try {
@@ -137,6 +142,32 @@ const DailyResultModal: React.FC<DailyResultModalProps> = ({
             <Text style={{ color: Colors.correct.main, fontSize: 18, fontWeight: '900', textAlign: 'center', marginTop: 4 }}>{timeLeft}</Text>
           </View>
         </View>
+
+        {/* Fair Play Status Badge */}
+        {!isFairPlay && (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255, 149, 0, 0.15)',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 10,
+            marginTop: 15,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 149, 0, 0.3)'
+          }}>
+            <Ionicons name="warning-outline" size={14} color="#ff9500" />
+            <Text style={{ color: '#ff9500', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>
+              RESMİ OLMAYAN SKOR
+            </Text>
+          </View>
+        )}
+        {backgroundStats && backgroundStats.count > 0 && (
+          <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 5 }}>
+            Uygulama Geçişi: {backgroundStats.count} | Süre: {backgroundStats.totalTime}s
+          </Text>
+        )}
 
         <View style={{ width: '100%', marginTop: 30, gap: 12 }}>
           <Pressable onPress={handleShare} style={({ pressed }) => ({ backgroundColor: Colors.correct.main, height: 55, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, opacity: pressed ? 0.9 : 1 })}>

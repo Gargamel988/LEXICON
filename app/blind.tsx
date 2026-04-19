@@ -5,8 +5,10 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Text,
-  View
+  View,
+  Alert
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -27,11 +29,12 @@ import { useWordGame } from '../hooks/useWordGame';
 import { getWordByCategory } from '../services/wordService';
 import { BlindDifficulty, BlindModeSettings } from '../types';
 import { toUpperTurkish } from '../utils/stringUtils';
+import Colors from '../constants/Colors';
 
 
 
-const BLIND_ACCENT = '#FFD54F';
-const BLIND_BG = '#121212';
+const BLIND_ACCENT = Colors.modes.blind.accent;
+const BLIND_BG = Colors.modes.blind.background;
 
 const DIFFICULTIES: Record<BlindDifficulty, { name: string, multiplier: number, color: string }> = {
   'TAM_KOR': { name: 'Tam Kör', multiplier: 3.0, color: '#ff3b30' },
@@ -56,15 +59,17 @@ export default function BlindMode() {
   const [revealedInfo, setRevealedInfo] = useState<string | null>(null);
   const [seenAuraLetters, setSeenAuraLetters] = useState<Set<string>>(new Set());
 
-  const { configs: powerUpConfigs } = usePowerUps(['first_letter', 'magnet', 'radar'], {
-    first_letter: { count: 1 },
-    magnet: { count: 1 },
-    radar: { count: 1 }
+  const { configs: powerUpConfigs, resetPowerUps, } = usePowerUps(['first_letter', 'magnet', 'radar'], {
+    first_letter: { count: 2 },
+    magnet: { count: 3 },
+    radar: { count: 3 }
   }, (key) => {
     if (key === 'first_letter') handleFirstLetter();
     if (key === 'magnet') handleMagnet();
     if (key === 'radar') handleRadar();
   });
+
+  const [startTime, setStartTime] = useState<number | null>(null);
 
   const feedbackScale = useSharedValue(1);
 
@@ -85,24 +90,26 @@ export default function BlindMode() {
     resetGameStates,
     lastFeedback,
     addHint,
+    isFairPlay,
+    backgroundStats
   } = useWordGame({
     word: currentWord,
     wordLength: settings?.length || 5,
     maxRows: settings?.maxAttempts || 6,
     isBlind: true,
     isRadarActive: isRadarActive,
-    onSuccess: (points) => {
+    onSuccess: (points, attempts, fairPlayData) => {
       const difficultyMultiplier = settings ? DIFFICULTIES[settings.difficulty].multiplier : 1;
       const finalScore = Math.round(points * difficultyMultiplier);
       setTotalPoints(finalScore);
       setGameStatus('win');
       setIsResultVisible(true);
-      submitResult(finalScore, true);
+      submitResult(finalScore, true, fairPlayData);
     },
-    onFail: (attempts) => {
+    onFail: (attempts, fairPlayData) => {
       setGameStatus('lose');
       setIsResultVisible(true);
-      submitResult(0, false);
+      submitResult(0, false, fairPlayData);
     },
     onScoreUpdate: (points) => {
       setTotalPoints(prev => prev + points);
@@ -110,21 +117,23 @@ export default function BlindMode() {
   });
 
   const saveResultMutation = useMutation({
-    mutationFn: (data: any) => {
-      console.log(`[Blind Mode] Saving stats:`, data);
-      return statsService.saveGameResult(user!.id, data);
-    },
+    mutationFn: (data: any) => statsService.saveGameResult(user!.id, data),
     onSuccess: (res) => {
-      console.log(`[Blind Mode] Stats saved successfully:`, res);
+      if (res && !res.success && res.reason === 'fair_play_violation') {
+        Toast.show({
+          type: 'info',
+          text1: 'Adil Oyun Uyarısı',
+          text2: 'Arka plana çok fazla geçiş yaptığınız için bu oyunun puanı kaydedilmedi.',
+          position: 'top',
+          visibilityTime: 4000
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-    },
-    onError: (err) => {
-      console.error(`[Blind Mode] Error saving stats:`, err);
     }
   });
 
-  const submitResult = async (finalScore: number, isWin: boolean) => {
+  const submitResult = async (finalScore: number, isWin: boolean, fairPlayData?: any) => {
     try {
       if (!user) return;
 
@@ -135,7 +144,9 @@ export default function BlindMode() {
         word_length: settings?.length || 5,
         attempts: currentRow + 1,
         category: settings?.category || 'karisik',
-        difficulty: settings?.difficulty || 'TAM_KOR'
+        difficulty: settings?.difficulty || 'TAM_KOR',
+        duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0,
+        is_fair_play: fairPlayData?.isFairPlay
       });
     } catch (error) {
       console.error('Lexicon: Error submitting blind result:', error);
@@ -152,15 +163,18 @@ export default function BlindMode() {
     };
     setSettings(newSettings);
     setCurrentWord(word);
+    resetPowerUps({ first_letter: { count: 2 }, magnet: { count: 3 }, radar: { count: 3 } });
     resetGameStates(6, word.length);
     setGameStatus('playing');
     setIsSettingsVisible(false);
     setSeenAuraLetters(new Set());
+    setStartTime(Date.now());
   };
 
   const handleRestart = () => {
     setIsResultVisible(false);
     setIsSettingsVisible(true);
+    resetPowerUps({ first_letter: { count: 2 }, magnet: { count: 3 }, radar: { count: 3 } });
     setForceShowFeedback(false);
     setIsRadarActive(false);
     setSeenAuraLetters(new Set());
@@ -269,12 +283,12 @@ export default function BlindMode() {
       />
 
       {/* NO-OVERLAP GRID AREA */}
-      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing.md }}>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
         <View style={{
           height: NOTICE_HEIGHT,
           justifyContent: 'center',
           alignItems: 'center',
-          marginBottom: spacing.xs
+          marginBottom: spacing.lg
         }}>
           {revealedInfo ? (
             <Animated.View
@@ -342,6 +356,8 @@ export default function BlindMode() {
         guesses={totalPoints}
         mode="timed" // Points style display
         extraData={currentRow + 1}
+        isFairPlay={isFairPlay}
+        backgroundStats={backgroundStats}
         onRestart={handleRestart}
         onHome={() => router.replace('/')}
       />
