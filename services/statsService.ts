@@ -1,5 +1,6 @@
 import { TabId } from "@/components/Stats/types";
 import { supabase } from "../lib/supabase";
+import { levelService } from "./levelService";
 
 export interface GameResult {
   mode:
@@ -10,7 +11,9 @@ export interface GameResult {
     | "climb"
     | "multi"
     | "survival"
-    | "timed";
+    | "timed"
+    | "battle"
+    | "bomb";
   is_winner: boolean;
   attempts?: number;
   duration_seconds?: number;
@@ -113,6 +116,25 @@ export interface AggregateStats {
   bestStreak: number;
   level: number;
   rank: string;
+  xp?: number;
+}
+
+export interface AchievementStats {
+  totalPoints: number;
+  totalWins: number;
+  totalGames: number;
+  totalWordsSolved: number;
+  bestDailyStreak: number;
+  currentWinStreak: number;
+  maxWinStreak: number;
+  modeWins: Record<string, number>;
+  maxClimbLevel: number;
+  maxSurvivalWords: number;
+  bestBlitzSpeed: number;
+  bestMultiSync: number;
+  categoryWins: Record<string, number>;
+  dailyTotal: number;
+  perfectSolves: number;
 }
 
 export const statsService = {
@@ -162,6 +184,19 @@ export const statsService = {
 
       if (result.mode === "daily") {
         await this.updateStreak(userId);
+      }
+
+      // XP Ekle
+      if (result.score && result.score > 0) {
+        await levelService.addExperience(userId, result.score);
+      }
+
+      // Başarımları kontrol et (Circular dependency'den kaçınmak için dinamik import)
+      try {
+        const { achievementService } = require("./achievementService");
+        achievementService.checkAndUnlockAchievements(userId, result);
+      } catch (achError) {
+        console.error("Achievement auto-check error:", achError);
       }
 
       return { success: true };
@@ -534,14 +569,21 @@ export const statsService = {
       .eq("user_id", userId)
       .maybeSingle();
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("xp, level")
+      .eq("id", userId)
+      .single();
+
     const totalPoints = results.reduce((a, b) => a + (b.score || 0), 0);
     const totalWins = results.filter((r) => r.is_winner).length;
     const bestStreak = streakData?.best_streak || 0;
 
-    // Seviye hesaplama (Örn: Her 2000 puan bir seviye)
-    const level = Math.floor(totalPoints / 2000) + 1;
+    // Seviye ve XP artık profilden geliyor
+    const level = profile?.level || 1;
+    const currentXp = profile?.xp || 0;
 
-    // Rütbe belirleme
+    // Rütbe belirleme (Seviyeye göre)
     let rank = "Acemi";
     if (level >= 50) rank = "Efsane";
     else if (level >= 30) rank = "Üstat";
@@ -549,12 +591,115 @@ export const statsService = {
     else if (level >= 5) rank = "Çırak";
 
     return {
-      totalPoints,
+      totalPoints, // Bu hala oyun skorlarının toplamı (istatistik için)
       totalWins,
       bestStreak,
       level,
       rank,
+      xp: currentXp,
     };
+  },
+
+  /**
+   * Başarımlar için gereken tüm detaylı istatistikleri tek seferde getirir
+   */
+  async getAchievementStats(userId: string): Promise<AchievementStats> {
+    const { data: results, error: resultsError } = await supabase
+      .from("game_results")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (resultsError) throw resultsError;
+
+    const { data: streakData } = await supabase
+      .from("user_streaks")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const stats: AchievementStats = {
+      totalPoints: 0,
+      totalWins: 0,
+      totalGames: results.length,
+      totalWordsSolved: 0,
+      bestDailyStreak: streakData?.best_streak || 0,
+      currentWinStreak: 0,
+      maxWinStreak: 0,
+      modeWins: {} as Record<string, number>,
+      maxClimbLevel: 0,
+      maxSurvivalWords: 0,
+      bestBlitzSpeed: 999,
+      bestMultiSync: 0,
+      categoryWins: {} as Record<string, number>,
+      dailyTotal: 0,
+      perfectSolves: 0,
+    };
+
+    let tempWinStreak = 0;
+
+    results.forEach((r) => {
+      stats.totalPoints += r.score || 0;
+
+      if (r.is_winner) {
+        stats.totalWins++;
+        stats.totalWordsSolved += r.solved_count || 1;
+
+        if (r.attempts === 1) {
+          stats.perfectSolves++;
+        }
+
+        // Mode wins
+        stats.modeWins[r.mode] = (stats.modeWins[r.mode] || 0) + 1;
+
+        // Category wins
+        if (r.category) {
+          stats.categoryWins[r.category] =
+            (stats.categoryWins[r.category] || 0) + 1;
+        }
+
+        // Win streak
+        tempWinStreak++;
+        stats.maxWinStreak = Math.max(stats.maxWinStreak, tempWinStreak);
+
+        // Mode specific maxes
+        if (r.mode === "climb") {
+          // r.score genelde level bilgisini tutuyor olabilir veya ulaşılan max level
+          // Varsayım: climb modunda r.solved_count veya r.score seviyeyi belirtir
+          stats.maxClimbLevel = Math.max(
+            stats.maxClimbLevel,
+            r.solved_count || 0,
+          );
+        }
+        if (r.mode === "survival") {
+          stats.maxSurvivalWords = Math.max(
+            stats.maxSurvivalWords,
+            r.solved_count || 0,
+          );
+        }
+        if (r.mode === "blitz") {
+          if (r.duration_seconds && r.duration_seconds > 0) {
+            stats.bestBlitzSpeed = Math.min(
+              stats.bestBlitzSpeed,
+              r.duration_seconds / (r.solved_count || 1),
+            );
+          }
+        }
+        if (r.mode === "multi") {
+          // Varsayım: multi_sync_score r.score veya meta içinde
+          stats.bestMultiSync = Math.max(stats.bestMultiSync, r.score || 0);
+        }
+        if (r.mode === "daily") {
+          stats.dailyTotal++;
+        }
+      } else {
+        tempWinStreak = 0;
+      }
+    });
+
+    stats.currentWinStreak = tempWinStreak;
+
+    return stats;
   },
 
   /**
@@ -567,6 +712,26 @@ export const statsService = {
       });
 
       if (error) throw error;
+
+      if (data && data.length > 0) {
+        const userIds = data.map((item: any) => item.user_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", userIds);
+
+        if (profiles) {
+          return data.map((item: any) => {
+            const profile = profiles.find((p: any) => p.id === item.user_id);
+            return {
+              ...item,
+              username: profile?.username || item.username || "Oyuncu",
+              avatar_url: profile?.avatar_url || item.avatar_url || null,
+            };
+          });
+        }
+      }
+
       return data;
     } catch (error) {
       console.error("Leaderboard fetch error:", error);
@@ -585,7 +750,26 @@ export const statsService = {
       });
 
       if (error) throw error;
-      return data && data.length > 0 ? data[0] : null;
+
+      const rankData = data && data.length > 0 ? data[0] : null;
+
+      if (rankData) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, avatar_url")
+          .eq("id", userId)
+          .single();
+
+        if (profile) {
+          return {
+            ...rankData,
+            username: profile.username || rankData.username || "Oyuncu",
+            avatar_url: profile.avatar_url || rankData.avatar_url || null,
+          };
+        }
+      }
+
+      return rankData;
     } catch (error) {
       console.error("User rank fetch error:", error);
       return null;
@@ -603,14 +787,29 @@ export const statsService = {
       });
 
       if (error) throw error;
-      return data as {
-        rank: number;
-        user_id: string;
-        username: string;
-        avatar_url: string;
-        score: string;
-        duration: number;
-      }[];
+
+      const leaderboardData = data as any[];
+
+      if (leaderboardData && leaderboardData.length > 0) {
+        const userIds = leaderboardData.map((item: any) => item.user_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", userIds);
+
+        if (profiles) {
+          return leaderboardData.map((item: any) => {
+            const profile = profiles.find((p: any) => p.id === item.user_id);
+            return {
+              ...item,
+              username: profile?.username || item.username || "Oyuncu",
+              avatar_url: profile?.avatar_url || item.avatar_url || null,
+            };
+          });
+        }
+      }
+
+      return leaderboardData;
     } catch (error) {
       console.error("Mode leaderboard fetch error:", error);
       return [];
@@ -629,9 +828,26 @@ export const statsService = {
       });
 
       if (error) throw error;
-      return data && data.length > 0
-        ? (data[0] as { rank: number; score: string; duration: number })
-        : null;
+
+      const rankData = data && data.length > 0 ? (data[0] as any) : null;
+
+      if (rankData) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, avatar_url")
+          .eq("id", userId)
+          .single();
+
+        if (profile) {
+          return {
+            ...rankData,
+            username: profile.username || rankData.username || "Oyuncu",
+            avatar_url: profile.avatar_url || rankData.avatar_url || null,
+          };
+        }
+      }
+
+      return rankData;
     } catch (error) {
       console.error("User mode rank fetch error:", error);
       return null;
@@ -1048,7 +1264,8 @@ export const statsService = {
   getClimbPerformanceAnalysis(results: any[]) {
     if (!results || results.length === 0) return undefined;
 
-    const levels = results.map((r) => r.solved_count || 0);
+    // Tırmanış'ta kaç tur oynandığı 'attempts' alanına kaydediliyor
+    const levels = results.map((r) => r.attempts || 0);
     const highestLevel = Math.max(0, ...levels);
     const avgLevel = Math.round(
       levels.reduce((a, b) => a + b, 0) / levels.length,
@@ -1062,10 +1279,11 @@ export const statsService = {
         ? Number((totalLevelsClimbed / totalTimeMin).toFixed(1))
         : 0;
 
+    // En az 1 tur geçen seanslar
     const levelWinRate =
       results.length > 0
         ? Math.round(
-            (results.filter((r) => r.solved_count > 0).length /
+            (results.filter((r) => (r.attempts || 0) > 0).length /
               results.length) *
               100,
           )

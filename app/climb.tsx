@@ -14,9 +14,11 @@ import GameLayout from '@/components/Layout/GameLayout';
 import ResultModal from '@/components/modal/ResultModal';
 import SettingsModal from '@/components/modal/SettingsModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useInventory } from '@/hooks/useInventory';
 import { usePowerUps } from '@/hooks/usePowerUps';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useWordGame } from '@/hooks/useWordGame';
+import { inventoryService } from '@/services/inventoryService';
 import { statsService } from '@/services/statsService';
 import { getWordByCategory } from '@/services/wordService';
 import { FadeInDown } from 'react-native-reanimated';
@@ -64,6 +66,7 @@ export default function ClimbGameScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const { getStock } = useInventory(user?.id);
     const { wp } = useResponsive();
 
     const [isReady, setIsReady] = useState(false);
@@ -84,17 +87,18 @@ export default function ClimbGameScreen() {
     const [sessionBackgroundStats, setSessionBackgroundStats] = useState({ count: 0, totalTime: 0 });
 
     const { configs: powerUpConfigs, resetPowerUps } = usePowerUps(['time', 'hint', 'freeze', 'extra', 'skip'], {
-        time: { count: 3 },
-        hint: { count: 2 },
-        freeze: { count: 2 },
-        extra: { count: 2 },
-        skip: { count: 1 }
+        time: { count: getStock('time') }, hint: { count: getStock('hint') }, freeze: { count: getStock('freeze') }, extra: { count: getStock('extra') }, skip: { count: getStock('skip') }
     }, (key) => {
-        if (key === 'time') return handleAddTime();
-        if (key === 'hint') return handleHint();
-        if (key === 'freeze') return handleFreeze();
-        if (key === 'extra') return handleExtraAttempt();
-        if (key === 'skip') return handleSkip();
+        let result: boolean | undefined = undefined;
+        if (key === 'time') result = handleAddTime();
+        else if (key === 'hint') result = handleHint();
+        else if (key === 'freeze') result = handleFreeze();
+        else if (key === 'extra') result = handleExtraAttempt();
+        else if (key === 'skip') result = handleSkip();
+        if (result !== false && result !== undefined && user) {
+            inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+        }
+        return result;
     });
 
     const timerProgress = useSharedValue(1);
@@ -155,6 +159,10 @@ export default function ClimbGameScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
         if (user) {
+            // Elmas ödülü — en az 1 tur geçildiyse
+            if (currentRoundRef.current > 1 && isSessionFairPlay) {
+                inventoryService.giveWinReward(user.id, 'climb').catch(() => {});
+            }
             saveResultMutation.mutate({
                 mode: 'climb',
                 is_winner: false,
@@ -233,13 +241,15 @@ export default function ClimbGameScreen() {
                 handleGameOver();
             }, 800); // Shorter delay for better flow
         },
+        // Sadece oyun başladıktan sonra arka plan izle
+        isActive: isReady && !isGameOver,
     });
 
     const handleStartGame = (category: string) => {
         setSelectedCategory(category);
         setIsReady(true);
         setCurrentRound(1);
-        resetPowerUps({ time: { count: 3 }, hint: { count: 2 }, freeze: { count: 2 }, extra: { count: 2 }, skip: { count: 2 } });
+        resetPowerUps({ time: { count: getStock('time') }, hint: { count: getStock('hint') }, freeze: { count: getStock('freeze') }, extra: { count: getStock('extra') }, skip: { count: getStock('skip') } });
         const config = getRoundConfig(1);
         startNextWord(category, 1);
         startTimer(config.timeLimit);
@@ -279,7 +289,7 @@ export default function ClimbGameScreen() {
         setScore(0);
         setCurrentRound(1);
         setIsGameOver(false);
-        resetPowerUps({ time: { count: 3 }, hint: { count: 2 }, freeze: { count: 2 }, extra: { count: 2 }, skip: { count: 2 } });
+        resetPowerUps({ time: { count: getStock('time') }, hint: { count: getStock('hint') }, freeze: { count: getStock('freeze') }, extra: { count: getStock('extra') }, skip: { count: getStock('skip') } });
         setIsReady(false);
         setIsTimerPaused(false);
         isTimerPausedRef.current = false;
@@ -477,6 +487,7 @@ export default function ClimbGameScreen() {
                 status="lose"
                 word={currentWord}
                 guesses={score}
+                category={selectedCategory}
                 extraData={currentRound}
                 isFairPlay={isSessionFairPlay}
                 backgroundStats={sessionBackgroundStats}

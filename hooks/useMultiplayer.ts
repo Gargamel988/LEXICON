@@ -55,6 +55,18 @@ export const useMultiplayer = () => {
       username: string;
     }) => {
       const room = await multiplayerService.getRoomByCode(code);
+      if (!room) {
+        throw new Error("Oda bulunamadı.");
+      }
+
+      if (room.status === "finished") {
+        throw new Error("Bu oda kapandı.");
+      }
+
+      if (room.status === "started") {
+        throw new Error("Oyun devam ediyor, şu an katılamazsınız.");
+      }
+
       await multiplayerService.joinRoom(room.id, userId, username, false);
       return room;
     },
@@ -65,7 +77,7 @@ export const useMultiplayer = () => {
       Toast.show({
         type: "error",
         text1: "Odaya Katılınamadı",
-        text2: "Oda kodu geçersiz veya bir hata oluştu.",
+        text2: error.message || "Oda kodu geçersiz veya bir hata oluştu.",
       });
     },
   });
@@ -87,7 +99,8 @@ interface UseRoomStateReturn {
   updateSettings: (category: string, wordLength: number) => void;
   startGame: (word: string) => void;
   startBombGame: () => void;
-  leaveRoom: () => void;
+  leaveRoom: () => Promise<void>;
+  returnToLobby: () => Promise<void>;
   changeMode: (mode: "battle" | "bomb") => void;
   isStarting: boolean;
 }
@@ -102,19 +115,30 @@ export const useRoomState = (
   const pathname = usePathname();
   const [isHost, setIsHost] = useState(false);
 
+  const cleanRoomCode = roomCode?.trim()?.toUpperCase();
+
   // 1. Oda Detaylarını Getir
   const { data: room, isLoading: isLoadingRoom } = useQuery({
-    queryKey: ["room", roomCode],
-    queryFn: () => multiplayerService.getRoomByCode(roomCode),
-    enabled: !!roomCode,
+    queryKey: ["room", cleanRoomCode],
+    queryFn: () => multiplayerService.getRoomByCode(cleanRoomCode),
+    enabled: !!cleanRoomCode,
   });
 
   // 2. Oyuncuları Getir
-  const { data: players = [], isLoading: isLoadingPlayers } = useQuery({
+  const { data: players = [], isLoading: isLoadingPlayers, refetch: refetchPlayers } = useQuery({
     queryKey: ["room_players", room?.id],
-    queryFn: () => multiplayerService.getRoomPlayers(room!.id),
+    queryFn: () => {
+        console.log(`[useRoomState] Fetching players for room ID: ${room?.id}`);
+        return multiplayerService.getRoomPlayers(room!.id);
+    },
     enabled: !!room?.id,
   });
+
+  useEffect(() => {
+    if (players.length > 0) {
+        console.log(`[useRoomState] Sync: ${players.length} players loaded for room ${cleanRoomCode}`);
+    }
+  }, [players.length, cleanRoomCode]);
 
   useEffect(() => {
     if (room && userId) {
@@ -122,11 +146,12 @@ export const useRoomState = (
 
       if (room.status === "started") {
         const targetPath = room.mode === "bomb" ? "/bomb" : "/battle";
-        if (pathname !== targetPath) {
-          router.push({
-            pathname: targetPath,
-            params: { code: roomCode },
-          } as any);
+        const targetUrl = `${targetPath}?id=${room.code}`;
+        
+        const currentPath = pathname.replace(/\/$/, "");
+        if (!currentPath.includes(targetPath)) {
+          console.log(`[useRoomState] Game started! Navigating to: ${targetUrl}`);
+          router.replace(targetUrl as any);
         }
       }
     }
@@ -164,14 +189,14 @@ export const useRoomState = (
           filter: `id=eq.${room.id}`,
         },
         (payload) => {
-          queryClient.setQueryData(["room", roomCode], payload.new);
+          // ÖNEMLİ: payload.new bazen sadece değişen kolonları içerir. 
+          // Cache'i bozmamak için veriyi geçersiz kılıp tekrar çekiyoruz.
+          queryClient.invalidateQueries({ queryKey: ["room", roomCode] });
         },
       )
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR") {
-          console.error(
-            `[Realtime] Channel error for room: ${room.id} (${channelId})`,
-          );
+          // Hata durumunda sessizce cleanup yapması için bırakıyoruz
         }
       });
 
@@ -220,6 +245,14 @@ export const useRoomState = (
       multiplayerService.leaveRoom(roomId, userId),
   });
 
+  const returnToLobbyMutation = useMutation({
+    mutationFn: (roomId: string) => multiplayerService.returnToLobby(roomId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["room", roomCode] });
+    },
+    onError: () => Toast.show({ type: "error", text2: "Lobiye dönülemedi" }),
+  });
+
   const changeModeMutation = useMutation({
     mutationFn: ({
       roomId,
@@ -240,10 +273,10 @@ export const useRoomState = (
   });
 
   return {
-    room,
+    room: room ?? undefined,
     players,
     isHost,
-    loading: isLoadingRoom || isLoadingPlayers,
+    loading: (isLoadingRoom && !room) || (isLoadingPlayers && players.length === 0),
     toggleReady: (currentReady: boolean) =>
       room &&
       userId &&
@@ -257,8 +290,16 @@ export const useRoomState = (
       room &&
       userId &&
       startBombGameMutation.mutate({ roomId: room.id, hostId: userId }),
-    leaveRoom: () =>
-      room && userId && leaveRoomMutation.mutate({ roomId: room.id, userId }),
+    leaveRoom: async () => {
+      if (room && userId) {
+        return leaveRoomMutation.mutateAsync({ roomId: room.id, userId });
+      }
+    },
+    returnToLobby: async () => {
+      if (room) {
+        return returnToLobbyMutation.mutateAsync(room.id);
+      }
+    },
     changeMode: (mode: "battle" | "bomb") =>
       room && changeModeMutation.mutate({ roomId: room.id, mode }),
     isStarting: startGameMutation.isPending || startBombGameMutation.isPending,

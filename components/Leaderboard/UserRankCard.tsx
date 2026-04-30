@@ -2,6 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, Text, View } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
+import { AvatarWithFrame } from '../Cosmetics/AvatarWithFrame';
+import { FREE_FRAME_ID } from '../../constants/frames';
+import { UserDisplayName } from '../Cosmetics/UserDisplayName';
 
 interface UserRankCardProps {
   userRankInfo: any;
@@ -10,6 +13,9 @@ interface UserRankCardProps {
   label: string;
   periodLabel: string;
   formatScore: (score: any) => string;
+  activeFrame?: string;
+  activeNameTag?: string | null;
+  active_title?: string | null;
 }
 
 export const UserRankCard: React.FC<UserRankCardProps> = ({ 
@@ -18,7 +24,10 @@ export const UserRankCard: React.FC<UserRankCardProps> = ({
   accentColor, 
   label, 
   periodLabel, 
-  formatScore 
+  formatScore,
+  activeFrame,
+  activeNameTag,
+  active_title
 }) => {
   const { spacing, moderateScale, verticalScale } = useResponsive();
 
@@ -47,35 +56,26 @@ export const UserRankCard: React.FC<UserRankCardProps> = ({
         #{userRankInfo.rank || '-'}
       </Text>
 
-      <View style={{
-        width: moderateScale(40),
-        height: moderateScale(40),
-        borderRadius: moderateScale(20),
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        marginRight: spacing.sm,
-        overflow: 'hidden',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)'
-      }}>
-        {user?.user_metadata?.avatar_url ? (
-          user.user_metadata.avatar_url.startsWith('http') ? (
-            <Image source={{ uri: user.user_metadata.avatar_url }} style={{ width: '100%', height: '100%' }} />
-          ) : (
-            <Text style={{ fontSize: moderateScale(24) }}>{user.user_metadata.avatar_url}</Text>
-          )
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="person" size={20} color="#666" />
-          </View>
-        )}
+      <View style={{ marginRight: spacing.sm }}>
+        <AvatarWithFrame 
+          avatarUrl={user?.user_metadata?.avatar_url} 
+          frameId={activeFrame || FREE_FRAME_ID} 
+          size={moderateScale(40)} 
+          username={user?.user_metadata?.full_name || user?.user_metadata?.username}
+        />
       </View>
 
       <View style={{ flex: 1 }}>
-        <Text style={{ color: '#fff', fontSize: moderateScale(14), fontWeight: '800' }}>
-          Senin Sıran
-        </Text>
+        <UserDisplayName
+          username="Senin Sıran"
+          nametagId={activeNameTag}
+          titleId={active_title}
+          size="mini"
+          containerStyle={{
+            alignItems: 'flex-start',
+            minWidth: undefined,
+          }}
+        />
         <Text style={{ color: '#888', fontSize: moderateScale(10), fontWeight: '700', marginTop: 2 }}>
           {label} Modu {periodLabel}
         </Text>

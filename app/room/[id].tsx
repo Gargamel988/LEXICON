@@ -1,31 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
+import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   Text,
   TouchableOpacity,
-  View,
-  Share,
-  ActivityIndicator,
+  View
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 
+import { AvatarWithFrame } from '../../components/Cosmetics/AvatarWithFrame';
+import { UserDisplayName } from '../../components/Cosmetics/UserDisplayName';
 import GameHeader from '../../components/Game/GameHeader';
 import GameLayout from '../../components/Layout/GameLayout';
 import Colors from '../../constants/Colors';
-import { useAuth } from '../../hooks/useAuth';
-import { useResponsive } from '../../hooks/useResponsive';
-import { useRoomState } from '../../hooks/useMultiplayer';
-import { getDailyWord, getWordByCategory } from '../../services/wordService';
 import { WORDS } from '../../data/words';
-import { RoomPlayer, Room } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
+import { useRoomState } from '../../hooks/useMultiplayer';
+import { useResponsive } from '../../hooks/useResponsive';
+import { getWordByCategory } from '../../services/wordService';
 
 const LOBBY_ACCENT = Colors.modes.lobby.accent;
 const LOBBY_BG = Colors.modes.lobby.background;
@@ -35,17 +35,18 @@ const lengths = [4, 5, 6, 7];
 
 export default function RoomScreen() {
   const router = useRouter();
-  const { id: roomCode } = useLocalSearchParams<{ id: string }>();
+  const { id: rawRoomCode } = useLocalSearchParams<{ id: string }>();
+  const roomCode = (rawRoomCode as string)?.trim().toUpperCase();
   const { user } = useAuth();
   const { width } = useResponsive();
-  
-  const { 
-    room, 
-    players, 
-    isHost, 
-    loading, 
-    toggleReady, 
-    startGame, 
+
+  const {
+    room,
+    players,
+    isHost,
+    loading,
+    toggleReady,
+    startGame,
     startBombGame,
     leaveRoom,
     updateSettings,
@@ -57,25 +58,18 @@ export default function RoomScreen() {
   const shareLink = Linking.createURL('lobby/' + roomCode);
 
   useEffect(() => {
+    // Sadece ekran mount olduğunda yapılacak işlemler varsa buraya
     return () => {
-      leaveRoom();
+      // Oyun başladığında leaveRoom yaparsak lobi bozulur.
+      // O yüzden burayı boş bırakıyoruz.
     };
   }, []);
 
   const handleCopyLink = async () => {
-    await Clipboard.setStringAsync(shareLink);
+    await Clipboard.setStringAsync(roomCode);
     Toast.show({ type: 'success', text1: 'Bağlantı Kopyalandı' });
   };
-
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `LEXICON oyununa katıl! Oda Kodu: ${roomCode}\nBağlantı: ${shareLink}`,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  ;
 
   const handleStartGame = () => {
     const isEveryoneReady = players.every(p => p.is_ready);
@@ -83,7 +77,7 @@ export default function RoomScreen() {
       Toast.show({ type: 'info', text1: 'Hazır Olmayanlar Var', text2: 'Tüm oyuncuların hazır olmasını bekleyin.' });
       return;
     }
-    
+
     if (room?.mode === 'bomb') {
       startBombGame();
     } else {
@@ -113,7 +107,7 @@ export default function RoomScreen() {
     );
   }
 
-  const currentPlayer = players.find(p => p.user_id === user?.id);
+  const currentPlayer = players.find(p => p.user_id === user?.id) || players[0]; // Fallback if sync is slow
 
   return (
     <GameLayout backgroundColor={LOBBY_BG}>
@@ -121,7 +115,10 @@ export default function RoomScreen() {
         title="BEKLEME ODASI"
         subtitle={`Oda: ${roomCode}`}
         accentColor={LOBBY_ACCENT}
-        onBack={() => router.back()}
+        onBack={() => {
+          leaveRoom();
+          router.replace('/(tabs)');
+        }}
         leftStats={{ label: 'OYUNCU', value: `${players.length}/4`, color: LOBBY_ACCENT }}
         rightStats={{ label: 'DURUM', value: 'CANLI', color: '#fff' }}
       />
@@ -135,25 +132,22 @@ export default function RoomScreen() {
                 <Text style={{ color: LOBBY_ACCENT, fontSize: 32, fontWeight: '900', letterSpacing: 4 }}>{roomCode}</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity 
-                   onPress={handleCopyLink}
-                   style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+                <TouchableOpacity
+                  onPress={handleCopyLink}
+                  style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
                 >
                   <Ionicons name="copy-outline" size={20} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity 
-                   onPress={() => setShowQrModal(true)}
-                   style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+                <TouchableOpacity
+                  onPress={() => setShowQrModal(true)}
+                  style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
                 >
                   <Ionicons name="qr-code-outline" size={20} color={LOBBY_ACCENT} />
                 </TouchableOpacity>
               </View>
             </View>
-            
-            <TouchableOpacity onPress={handleShare} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 15, paddingVertical: 8 }}>
-              <Ionicons name="share-social-outline" size={16} color="rgba(255,255,255,0.6)" />
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600' }}>Davet Linkini Paylaş</Text>
-            </TouchableOpacity>
+
+
           </BlurView>
         </Animated.View>
 
@@ -241,16 +235,31 @@ export default function RoomScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
           <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900' }}>OYUNCULAR</Text>
         </View>
-        
+
         {players.map((player, index) => (
           <Animated.View key={player.id} entering={FadeInDown.delay(index * 100).duration(600)} style={{ marginBottom: 12 }}>
             <BlurView intensity={10} tint="light" style={{ borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: player.is_host ? `${LOBBY_ACCENT}33` : 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: player.is_host ? `${LOBBY_ACCENT}22` : 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: player.is_host ? LOBBY_ACCENT : 'rgba(255,255,255,0.1)' }}>
-                  <Text style={{ fontSize: 24 }}>{player.is_host ? '👑' : '👤'}</Text>
+                <View>
+                  <AvatarWithFrame
+                    avatarUrl={player.avatar_url}
+                    frameId={player.active_frame || ''}
+                    size={48}
+                    username={player.username}
+                  />
+                  {player.is_host && (
+                    <View style={{ position: 'absolute', top: -10, right: -5, backgroundColor: '#000', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: LOBBY_ACCENT }}>
+                      <Text style={{ fontSize: 10 }}>👑</Text>
+                    </View>
+                  )}
                 </View>
                 <View>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{player.username}</Text>
+                  <UserDisplayName
+                    username={player.username}
+                    nametagId={player.active_nametag}
+                    titleId={player.active_title}
+                    size="small"
+                  />
                   {player.is_host && (
                     <Text style={{ color: LOBBY_ACCENT, fontSize: 10, fontWeight: '800', marginTop: 2 }}>HOST / ODA SAHİBİ</Text>
                   )}
@@ -259,7 +268,7 @@ export default function RoomScreen() {
                   )}
                 </View>
               </View>
-              
+
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={{ color: player.is_ready ? LOBBY_ACCENT : 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '700' }}>
                   {player.is_ready ? 'HAZIR' : 'BEKLİYOR'}
@@ -284,11 +293,11 @@ export default function RoomScreen() {
           <TouchableOpacity
             onPress={() => toggleReady(!!currentPlayer?.is_ready)}
             activeOpacity={0.8}
-            style={{ 
-              height: 56, 
-              borderRadius: 16, 
-              backgroundColor: currentPlayer?.is_ready ? 'rgba(255,255,255,0.1)' : LOBBY_ACCENT, 
-              alignItems: 'center', 
+            style={{
+              height: 56,
+              borderRadius: 16,
+              backgroundColor: currentPlayer?.is_ready ? 'rgba(255,255,255,0.1)' : LOBBY_ACCENT,
+              alignItems: 'center',
               justifyContent: 'center',
               borderWidth: currentPlayer?.is_ready ? 1 : 0,
               borderColor: 'rgba(255,255,255,0.2)',
@@ -305,13 +314,13 @@ export default function RoomScreen() {
             onPress={handleStartGame}
             disabled={isStarting}
             activeOpacity={0.8}
-            style={{ 
-              height: 64, 
-              borderRadius: 20, 
-              backgroundColor: LOBBY_ACCENT, 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
+            style={{
+              height: 64,
+              borderRadius: 20,
+              backgroundColor: LOBBY_ACCENT,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: 12,
               shadowColor: LOBBY_ACCENT,
               shadowOffset: { width: 0, height: 8 },
@@ -322,7 +331,7 @@ export default function RoomScreen() {
             }}
           >
             {isStarting ? (
-               <ActivityIndicator color="#000" />
+              <ActivityIndicator color="#000" />
             ) : (
               <>
                 <Text style={{ color: '#000', fontSize: 18, fontWeight: '900', letterSpacing: 1 }}>OYUNU BAŞLAT</Text>

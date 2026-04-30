@@ -11,10 +11,10 @@ interface LeaderboardPodiumProps {
   onPlayerPress: (player: any) => void;
 }
 
-export const LeaderboardPodium: React.FC<LeaderboardPodiumProps> = ({ 
-  topThree, 
-  accentColor, 
-  userId, 
+export const LeaderboardPodium: React.FC<LeaderboardPodiumProps> = ({
+  topThree,
+  accentColor,
+  userId,
   formatScore,
   onPlayerPress
 }) => {
@@ -37,6 +37,9 @@ export const LeaderboardPodium: React.FC<LeaderboardPodiumProps> = ({
           username={topThree[1].username || 'Oyuncu'}
           score={formatScore(topThree[1].score || topThree[1].total_score, topThree[1].duration)}
           avatar_url={topThree[1].avatar_url}
+          active_frame={topThree[1].active_frame}
+          active_nametag={topThree[1].active_nametag}
+          active_title={topThree[1].active_title}
           isCurrentUser={topThree[1].user_id === userId}
           accentColor={accentColor}
           onPress={() => onPlayerPress(topThree[1])}
@@ -51,6 +54,9 @@ export const LeaderboardPodium: React.FC<LeaderboardPodiumProps> = ({
           username={topThree[0].username || 'Şampiyon'}
           score={formatScore(topThree[0].score || topThree[0].total_score, topThree[0].duration)}
           avatar_url={topThree[0].avatar_url}
+          active_frame={topThree[0].active_frame}
+          active_nametag={topThree[0].active_nametag}
+          active_title={topThree[0].active_title}
           isCurrentUser={topThree[0].user_id === userId}
           accentColor={accentColor}
           onPress={() => onPlayerPress(topThree[0])}
@@ -65,6 +71,9 @@ export const LeaderboardPodium: React.FC<LeaderboardPodiumProps> = ({
           username={topThree[2].username || 'Oyuncu'}
           score={formatScore(topThree[2].score || topThree[2].total_score, topThree[2].duration)}
           avatar_url={topThree[2].avatar_url}
+          active_frame={topThree[2].active_frame}
+          active_nametag={topThree[2].active_nametag}
+          active_title={topThree[2].active_title}
           isCurrentUser={topThree[2].user_id === userId}
           accentColor={accentColor}
           onPress={() => onPlayerPress(topThree[2])}

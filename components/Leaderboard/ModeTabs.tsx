@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useResponsive } from '../../hooks/useResponsive';
 
 export interface ModeConfig {
@@ -21,7 +21,7 @@ interface ModeTabsProps {
 export const ModeTabs: React.FC<ModeTabsProps> = ({ modes, selectedMode, onSelect }) => {
   const { moderateScale, spacing, verticalScale } = useResponsive();
   const scrollViewRef = useRef<ScrollView>(null);
-  
+
   // Tab index for animation
   const activeIndex = useSharedValue(modes.findIndex(m => m.id === selectedMode));
 
@@ -33,7 +33,7 @@ export const ModeTabs: React.FC<ModeTabsProps> = ({ modes, selectedMode, onSelec
         duration: 350,
         easing: Easing.bezier(0.4, 0, 0.2, 1)
       });
-      
+
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({
           x: Math.max(0, index * moderateScale(110) - spacing.xl * 2),
@@ -49,7 +49,7 @@ export const ModeTabs: React.FC<ModeTabsProps> = ({ modes, selectedMode, onSelec
         ref={scrollViewRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ 
+        contentContainerStyle={{
           paddingHorizontal: spacing.md,
           paddingTop: spacing.xs,
           paddingBottom: spacing.xs,
@@ -57,7 +57,7 @@ export const ModeTabs: React.FC<ModeTabsProps> = ({ modes, selectedMode, onSelec
       >
         {modes.map((m, index) => {
           const isActive = selectedMode === m.id;
-          
+
           return (
             <TouchableOpacity
               key={m.id}

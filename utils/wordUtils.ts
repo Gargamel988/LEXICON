@@ -167,12 +167,43 @@ export const getWordsByLength = (length: number): string[] => {
  * Bomb Modu için rastgele bir hece (2 harfli yaygın kombinasyon) üretir.
  * Sözlükteki kelimelerden rastgele seçilerek cevaplanabilir olması garanti edilir.
  */
-export const getRandomSyllable = (): string => {
+export const getRandomSyllable = (level: number = 1): string => {
   ensureInitialized();
   const words = gameWordsByLength[5] || gameWordsByLength[6] || [];
-  if (words.length === 0) return "MA"; // Fallback
+  if (words.length === 0) return "MA";
+
+  if (level >= 3) {
+    // Seviye 3+: İki farklı hece döndür
+    const s1 = getRandomSyllable(1);
+    let s2 = getRandomSyllable(1);
+    while (s1 === s2) s2 = getRandomSyllable(1);
+    return `${s1},${s2}`;
+  }
 
   const randomWord = words[Math.floor(Math.random() * words.length)];
-  const start = Math.floor(Math.random() * (randomWord.length - 1));
-  return randomWord.substring(start, start + 2);
+
+  if (level === 1) {
+    // Seviye 1: 2 harfli hece
+    const start = Math.floor(Math.random() * (randomWord.length - 1));
+    return randomWord.substring(start, start + 2);
+  } else {
+    // Seviye 2: 3 harfli hece
+    const start = Math.floor(Math.random() * (randomWord.length - 2));
+    return randomWord.substring(start, start + 3);
+  }
+};
+export const findWordWithSyllable = (syllables: string[]): string | null => {
+  ensureInitialized();
+  const allWords = Array.from(validationSet || []);
+  
+  // Randomize start point for variety
+  const start = Math.floor(Math.random() * allWords.length);
+  for (let i = 0; i < allWords.length; i++) {
+    const word = allWords[(start + i) % allWords.length];
+    if (word.length < 4) continue;
+    const matches = syllables.every(s => word.includes(s));
+    if (matches) return word;
+  }
+  
+  return null;
 };

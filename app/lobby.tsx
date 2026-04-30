@@ -6,6 +6,7 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -17,12 +18,14 @@ import {
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 
+import { useQuery } from '@tanstack/react-query';
 import GameHeader from '../components/Game/GameHeader';
 import GameLayout from '../components/Layout/GameLayout';
 import Colors from '../constants/Colors';
 import { useAuth } from '../hooks/useAuth';
 import { useMultiplayer } from '../hooks/useMultiplayer';
 import { useResponsive } from '../hooks/useResponsive';
+import { supabase } from '../lib/supabase';
 
 const LOBBY_ACCENT = Colors.modes.lobby.accent;
 const LOBBY_BG = Colors.modes.lobby.background;
@@ -36,6 +39,19 @@ export default function LobbyScreen() {
   const [isScanning, setIsScanning] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase.from('profiles').select('username').eq('id', user.id).single();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const username = userProfile?.username ?? user?.email?.split('@')[0] ?? 'Oyuncu';
 
   // Deep Link Listener
   const url = Linking.useURL();
@@ -69,10 +85,10 @@ export default function LobbyScreen() {
     }
 
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    createRoom({ 
-      code, 
-      hostId: user.id, 
-      username: user.email?.split('@')[0] || 'Oyuncu' 
+    createRoom({
+      code,
+      hostId: user.id,
+      username: username
     });
   };
 
@@ -88,10 +104,10 @@ export default function LobbyScreen() {
       return;
     }
 
-    joinRoom({ 
-      code, 
-      userId: user.id, 
-      username: user.email?.split('@')[0] || 'Oyuncu' 
+    joinRoom({
+      code,
+      userId: user.id,
+      username: username
     });
   };
 
@@ -130,7 +146,7 @@ export default function LobbyScreen() {
         title="LOBİ"
         subtitle="Multiplayer"
         accentColor={LOBBY_ACCENT}
-        onBack={() => router.back()}
+        onBack={() => router.replace('/(tabs)')}
         leftStats={{ label: 'AKTİF', value: '0', color: LOBBY_ACCENT }}
         rightStats={{ label: 'ODALAR', value: '0', color: '#fff' }}
       />
@@ -157,14 +173,15 @@ export default function LobbyScreen() {
               <Text style={{ color: LOBBY_ACCENT, fontSize: 12, fontWeight: '800', marginBottom: 8, letterSpacing: 1 }}>ODA KODU</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                 <TextInput
-                  style={{ flex: 1, height: 60, paddingLeft: 44, color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 4, textAlign: 'center' }}
-                  placeholder="Örn: 54A2"
+                  style={{ flex: 1, height: 60, paddingLeft: 44, color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 4, textAlign: 'center' }}
+                  placeholder="6 HANELİ KOD"
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   value={roomCode}
                   onChangeText={(text) => setRoomCode(text.toUpperCase())}
                   maxLength={6}
                   autoCapitalize="characters"
                   autoCorrect={false}
+                  editable={!isJoining && !isCreating}
                 />
                 <TouchableOpacity
                   onPress={startScanning}
@@ -180,10 +197,13 @@ export default function LobbyScreen() {
               <TouchableOpacity
                 onPress={() => handleJoinRoom()}
                 activeOpacity={0.8}
-                style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: LOBBY_ACCENT, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, backgroundColor: LOBBY_ACCENT }}
+                disabled={isJoining || isCreating}
+                style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: LOBBY_ACCENT, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, backgroundColor: (isJoining || isCreating) ? '#333' : LOBBY_ACCENT }}
               >
-                <Text style={{ color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: 1 }}>ODAYA KATIL</Text>
-                <Ionicons name="enter-outline" size={20} color="#000" />
+                <Text style={{ color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: 1 }}>
+                  {isJoining ? 'KATILINIYOR...' : 'ODAYA KATIL'}
+                </Text>
+                {isJoining ? <ActivityIndicator size="small" color="#000" /> : <Ionicons name="enter-outline" size={20} color="#000" />}
               </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 20, paddingHorizontal: 20 }}>
@@ -195,10 +215,13 @@ export default function LobbyScreen() {
               <TouchableOpacity
                 onPress={handleCreateRoom}
                 activeOpacity={0.7}
-                style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.03)' }}
+                disabled={isJoining || isCreating}
+                style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: (isJoining || isCreating) ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.03)' }}
               >
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 1 }}>YENİ ODA KUR</Text>
-                <Ionicons name="add-circle-outline" size={20} color={LOBBY_ACCENT} />
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 1 }}>
+                  {isCreating ? 'KURULUYOR...' : 'YENİ ODA KUR'}
+                </Text>
+                {isCreating ? <ActivityIndicator size="small" color={LOBBY_ACCENT} /> : <Ionicons name="add-circle-outline" size={20} color={LOBBY_ACCENT} />}
               </TouchableOpacity>
             </View>
           </BlurView>

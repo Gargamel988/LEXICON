@@ -45,6 +45,8 @@ export const Colors = {
     multi: { accent: "#9c27b0", background: "#121212" },
     lobby: { accent: "#639922", background: "#121212" },
     battle: { accent: "#FF0055", background: "#121212" },
+    bomb: { accent: "#FF5722", background: "#121212" },
+    timed: { accent: "#82b1ff", background: "#121212" },
   },
 };
 

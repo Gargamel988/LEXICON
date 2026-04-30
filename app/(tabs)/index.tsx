@@ -9,7 +9,9 @@ import DailyCard from '../../components/Home/DailyCard';
 import ModeCard from '../../components/Home/ModeCard';
 import AuthWarningModal from '../../components/modal/AuthWarningModal';
 import Colors from '../../constants/Colors';
+import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
+import { useInventory } from '../../hooks/useInventory';
 
 type GameMode = {
   id: string;
@@ -33,6 +35,7 @@ const GAME_MODES: GameMode[] = [
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { coins } = useInventory(user?.id);
   const [isAuthWarningVisible, setIsAuthWarningVisible] = React.useState(false);
   const [pendingModeLink, setPendingModeLink] = React.useState<string | null>(null);
 
@@ -55,13 +58,13 @@ export default function HomeScreen() {
       {/* CUSTOM HEADER */}
       <View style={{
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 10,
       }}>
 
-
+        {/* Logo */}
         <View style={{ alignItems: 'center' }}>
           <Text style={{
             color: Colors.correct.main,
@@ -72,6 +75,29 @@ export default function HomeScreen() {
             LEXİCON
           </Text>
         </View>
+
+        {/* Elmas Bakiyesi */}
+        {user && (
+          <Pressable
+            onPress={() => router.push('/(tabs)/shop' as any)}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: pressed ? 'rgba(255,214,0,0.18)' : 'rgba(255,214,0,0.1)',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(255,214,0,0.25)',
+            })}
+          >
+            <Ionicons name={COIN_ICON} size={15} color={COIN_COLOR} />
+            <Text style={{ color: COIN_COLOR, fontWeight: '900', fontSize: 14 }}>
+              {coins.toLocaleString('tr-TR')}
+            </Text>
+          </Pressable>
+        )}
 
       </View>
 

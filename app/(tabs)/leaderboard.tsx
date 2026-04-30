@@ -11,6 +11,7 @@ import { PlayerStatsModal } from '../../components/Leaderboard/PlayerStatsModal'
 import { RankItem } from '../../components/Leaderboard/RankItem';
 import { UserRankCard } from '../../components/Leaderboard/UserRankCard';
 import { useAuth } from '../../hooks/useAuth';
+import { useBulkActiveCosmetics } from '../../hooks/useCosmetics';
 import { useResponsive } from '../../hooks/useResponsive';
 import { statsService } from '../../services/statsService';
 
@@ -18,6 +19,9 @@ interface SelectedUser {
   id: string;
   username: string;
   avatar_url?: string;
+  active_frame?: string;
+  active_nametag?: string | null;
+  active_title?: string | null;
 }
 
 const MODES: ModeConfig[] = [
@@ -26,6 +30,7 @@ const MODES: ModeConfig[] = [
   { id: 'blitz', label: 'Blitz', icon: 'flash-outline', color: '#ff7e79', unit: 'Puan' },
   { id: 'climb', label: 'Tırmanış', icon: 'trending-up-outline', color: '#CF4C13', unit: 'Tur' },
   { id: 'survival', label: 'Can Modu', icon: 'heart-outline', color: '#ff3b30', unit: 'Kelime' },
+  { id: 'multi', label: 'Çoklu Mod', icon: 'game-controller-outline', color: '#9b59b6', unit: 'Puan' },
 ];
 
 export default function LeaderboardScreen() {
@@ -34,10 +39,9 @@ export default function LeaderboardScreen() {
   const [tabIndex, setTabIndex] = useState(0);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { wp, hp, moderateScale, spacing, verticalScale } = useResponsive();
+  const { wp, moderateScale, spacing } = useResponsive();
 
   const screenWidth = useMemo(() => wp(100), [wp]);
-  const screenHeight = useMemo(() => hp(100), [hp]);
 
   // Animation stuff
   const translateX = useSharedValue(0);
@@ -135,6 +139,30 @@ export default function LeaderboardScreen() {
   const topThree = leaderboardData.slice(0, 3);
   const restOfList = leaderboardData.slice(3);
 
+  // ─── Kullanıcıların kozmetiklerini çek ───
+  const userIds = useMemo(() => {
+    const ids = leaderboardData.map((d: any) => d.user_id);
+    if (user?.id && !ids.includes(user.id)) ids.push(user.id);
+    return ids;
+  }, [leaderboardData, user?.id]);
+
+  const { data: activeCosmeticsMap = {} } = useBulkActiveCosmetics(userIds);
+
+  // Data map for passing into components
+  const enrichedTopThree = topThree.map((item: any) => ({
+    ...item,
+    active_frame: activeCosmeticsMap[item.user_id]?.frame,
+    active_nametag: activeCosmeticsMap[item.user_id]?.nametag,
+    active_title: activeCosmeticsMap[item.user_id]?.title
+  }));
+
+  const enrichedRestOfList = restOfList.map((item: any) => ({
+    ...item,
+    active_frame: activeCosmeticsMap[item.user_id]?.frame,
+    active_nametag: activeCosmeticsMap[item.user_id]?.nametag,
+    active_title: activeCosmeticsMap[item.user_id]?.title
+  }));
+
   const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
 
   const handlePlayerPress = (item: any) => {
@@ -142,6 +170,9 @@ export default function LeaderboardScreen() {
       id: item.user_id,
       username: item.username || 'Oyuncu',
       avatar_url: item.avatar_url,
+      active_frame: item.active_frame,
+      active_nametag: item.active_nametag,
+      active_title: item.active_title,
     });
   };
 
@@ -153,7 +184,7 @@ export default function LeaderboardScreen() {
         accentColor={currentModeConfig.color}
       />
       <LeaderboardPodium
-        topThree={topThree}
+        topThree={enrichedTopThree}
         accentColor={currentModeConfig.color}
         userId={user?.id}
         formatScore={formatScore}
@@ -195,7 +226,7 @@ export default function LeaderboardScreen() {
               </View>
             ) : (
               <FlatList
-                data={restOfList}
+                data={enrichedRestOfList}
                 keyExtractor={(item) => `${selectedMode}-${item.user_id}`}
                 renderItem={({ item }: { item: any }) => (
                   <RankItem
@@ -203,6 +234,9 @@ export default function LeaderboardScreen() {
                     username={item.username || 'Oyuncu'}
                     score={formatScore(item.score || item.total_score, item.duration)}
                     avatar_url={item.avatar_url}
+                    active_frame={item.active_frame}
+                    active_nametag={item.active_nametag}
+                    active_title={item.active_title}
                     isCurrentUser={item.user_id === user?.id}
                     accentColor={currentModeConfig.color}
                     onPress={() => handlePlayerPress(item)}
@@ -222,6 +256,9 @@ export default function LeaderboardScreen() {
             label={currentModeConfig.label}
             periodLabel={period === 'all_time' ? 'Tüm Zamanlar' : period === 'weekly' ? 'Haftalık' : 'Günlük'}
             formatScore={(score) => formatScore(score)}
+            activeFrame={user ? activeCosmeticsMap[user.id]?.frame : undefined}
+            activeNameTag={user ? activeCosmeticsMap[user.id]?.nametag : undefined}
+            active_title={user ? activeCosmeticsMap[user.id]?.title : undefined}
           />
 
           <PlayerStatsModal
@@ -230,6 +267,9 @@ export default function LeaderboardScreen() {
             userId={selectedUser?.id || null}
             username={selectedUser?.username || ''}
             avatar_url={selectedUser?.avatar_url}
+            active_frame={selectedUser?.active_frame}
+            active_nametag={selectedUser?.active_nametag}
+            active_title={selectedUser?.active_title}
           />
         </View>
       </GestureDetector>

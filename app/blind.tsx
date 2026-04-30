@@ -1,5 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useInventory } from '@/hooks/useInventory';
 import { statsService } from '@/services/statsService';
+import { inventoryService } from '@/services/inventoryService';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -47,6 +49,7 @@ export default function BlindMode() {
   const { spacing } = useResponsive();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { getStock } = useInventory(user?.id);
 
   const [settings, setSettings] = useState<BlindModeSettings | null>(null);
   const [isSettingsVisible, setIsSettingsVisible] = useState(true);
@@ -60,13 +63,16 @@ export default function BlindMode() {
   const [seenAuraLetters, setSeenAuraLetters] = useState<Set<string>>(new Set());
 
   const { configs: powerUpConfigs, resetPowerUps, } = usePowerUps(['first_letter', 'magnet', 'radar'], {
-    first_letter: { count: 2 },
-    magnet: { count: 3 },
-    radar: { count: 3 }
+    first_letter: { count: getStock('first_letter') }, magnet: { count: getStock('magnet') }, radar: { count: getStock('radar') }
   }, (key) => {
-    if (key === 'first_letter') handleFirstLetter();
-    if (key === 'magnet') handleMagnet();
-    if (key === 'radar') handleRadar();
+    let result: boolean | void;
+    if (key === 'first_letter') { handleFirstLetter(); result = true; }
+    else if (key === 'magnet') { handleMagnet(); result = true; }
+    else if (key === 'radar') { handleRadar(); result = true; }
+    if (result !== false && result !== undefined && user) {
+      inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+    }
+    return result;
   });
 
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -113,7 +119,9 @@ export default function BlindMode() {
     },
     onScoreUpdate: (points) => {
       setTotalPoints(prev => prev + points);
-    }
+    },
+    // Sadece oyun aktifken arka plan izle
+    isActive: !isSettingsVisible && gameStatus === 'playing',
   });
 
   const saveResultMutation = useMutation({
@@ -136,7 +144,9 @@ export default function BlindMode() {
   const submitResult = async (finalScore: number, isWin: boolean, fairPlayData?: any) => {
     try {
       if (!user) return;
-
+      if (isWin && fairPlayData?.isFairPlay !== false) {
+        inventoryService.giveWinReward(user.id, 'blind').catch(() => {});
+      }
       saveResultMutation.mutate({
         mode: 'blind',
         score: finalScore,
@@ -163,7 +173,7 @@ export default function BlindMode() {
     };
     setSettings(newSettings);
     setCurrentWord(word);
-    resetPowerUps({ first_letter: { count: 2 }, magnet: { count: 3 }, radar: { count: 3 } });
+    resetPowerUps({ first_letter: { count: getStock('first_letter') }, magnet: { count: getStock('magnet') }, radar: { count: getStock('radar') } });
     resetGameStates(6, word.length);
     setGameStatus('playing');
     setIsSettingsVisible(false);
@@ -174,7 +184,7 @@ export default function BlindMode() {
   const handleRestart = () => {
     setIsResultVisible(false);
     setIsSettingsVisible(true);
-    resetPowerUps({ first_letter: { count: 2 }, magnet: { count: 3 }, radar: { count: 3 } });
+    resetPowerUps({ first_letter: { count: getStock('first_letter') }, magnet: { count: getStock('magnet') }, radar: { count: getStock('radar') } });
     setForceShowFeedback(false);
     setIsRadarActive(false);
     setSeenAuraLetters(new Set());
@@ -354,7 +364,8 @@ export default function BlindMode() {
         status={gameStatus === 'win' ? 'win' : 'lose'}
         word={currentWord}
         guesses={totalPoints}
-        mode="timed" // Points style display
+        mode="blind" 
+        category={settings ? DIFFICULTIES[settings.difficulty].name : undefined}
         extraData={currentRow + 1}
         isFairPlay={isFairPlay}
         backgroundStats={backgroundStats}

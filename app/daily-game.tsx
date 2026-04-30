@@ -10,9 +10,12 @@ import Grid from '../components/Grid/Grid';
 import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
 import DailyResultModal from '../components/modal/DailyResultModal';
+import { useAuth } from '../hooks/useAuth';
 import { useDailyGame } from '../hooks/useDailyGame';
+import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
 import { useWordGame } from '../hooks/useWordGame';
+import { inventoryService } from '../services/inventoryService';
 import Colors from '../constants/Colors';
 
 const DAILY_ACCENT = Colors.modes.daily.accent;
@@ -20,6 +23,8 @@ const DAILY_BG = Colors.modes.daily.background;
 
 export default function DailyGameScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { getStock } = useInventory(user?.id);
   const { dailyWord, isLoading, hasPlayed, playData, timeLeft, submitResult, streak } = useDailyGame();
 
   const [startTime] = useState(Date.now());
@@ -59,6 +64,11 @@ export default function DailyGameScreen() {
       setFinalData(resultData);
       setIsResultVisible(true);
       setIsGameOver(true);
+
+      // Elmas ödülü
+      if (user && fairPlayData?.isFairPlay !== false) {
+        inventoryService.giveWinReward(user.id, 'daily').catch(() => {});
+      }
 
       try {
         const res = await submitResult({ 
@@ -118,6 +128,9 @@ export default function DailyGameScreen() {
         console.error('Lexicon: Submit error', e);
       }
     },
+    // Kelime yüklendiğinde ve sonuç gösterilmemişken arka plan izle
+    // NOT: isGameOver useWordGame'den döndüğü için burada kullanılamaz; isResultVisible kullanılır
+    isActive: !isLoading && !!dailyWord && !isResultVisible,
   });
 
   useEffect(() => {
@@ -125,18 +138,16 @@ export default function DailyGameScreen() {
   }, [dailyWord]);
 
   const { configs: powerUpConfigs } = usePowerUps(['hint', 'bomb'], {
-    hint: { count: 1 },
-    bomb: { count: 1 }
+    hint: { count: getStock('hint') },
+    bomb: { count: getStock('bomb') }
   }, (key) => {
-    if (key === 'hint') {
-      const success = getHint();
-      return success !== false;
+    let result: boolean | undefined = undefined;
+    if (key === 'hint') { const s = getHint(); result = s !== false; }
+    else if (key === 'bomb') { const s = useBomb(); result = s !== false; }
+    if (result !== false && result !== undefined && user) {
+      inventoryService.usePowerUp(user.id, key as any).catch(() => {});
     }
-    if (key === 'bomb') {
-      const success = useBomb();
-      return success !== false;
-    }
-    return false;
+    return result ?? false;
   });
 
   useEffect(() => {

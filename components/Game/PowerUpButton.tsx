@@ -1,24 +1,26 @@
-import { Ionicons } from '@expo/vector-icons';
 import React, { useRef } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
+import { PowerUpDefinition, renderPowerUpIcon } from '../../constants/powerUps';
 import { useResponsive } from '../../hooks/useResponsive';
 
 interface PowerUpButtonProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  def: PowerUpDefinition;          // icon + iconSet birlikte geliyor
   label: string;
   count: number;
   accentColor: string;
   onPress: () => void;
+  onEmptyPress?: () => void;
   onTriggerInfo: (label: string) => void;
   isActive?: boolean;
 }
 
 const PowerUpButton: React.FC<PowerUpButtonProps> = ({
-  icon,
+  def,
   label,
   count,
   accentColor,
   onPress,
+  onEmptyPress,
   onTriggerInfo,
   isActive = false
 }) => {
@@ -27,7 +29,11 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
   const isDisabled = count <= 0;
 
   const handlePress = () => {
-    if (isDisabled) return;
+    if (isDisabled) {
+      // RİSK toggle her zaman çalışır, diğerleri empty popup açar
+      if (label !== 'RİSK' && onEmptyPress) onEmptyPress();
+      return;
+    }
 
     Animated.sequence([
       Animated.timing(scale, { toValue: 0.88, duration: 80, useNativeDriver: true }),
@@ -46,7 +52,6 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={400}
-        disabled={isDisabled}
         style={{ alignItems: 'center' }}
       >
         <Animated.View style={{
@@ -64,11 +69,11 @@ const PowerUpButton: React.FC<PowerUpButtonProps> = ({
           shadowOpacity: (isDisabled && label !== "RİSK") ? 0 : 0.5,
           shadowRadius: 10,
         }}>
-          <Ionicons
-            name={icon}
-            size={24}
-            color={(isDisabled && label !== "RİSK") ? 'rgba(255,255,255,0.15)' : (label === "RİSK" && !isActive ? '#666' : accentColor)}
-          />
+          {renderPowerUpIcon(
+            def,
+            24,
+            (isDisabled && label !== 'RİSK') ? 'rgba(255,255,255,0.15)' : (label === 'RİSK' && !isActive ? '#666' : accentColor)
+          )}
 
           {/* Count badge */}
           <View style={{

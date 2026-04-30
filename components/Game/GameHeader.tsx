@@ -82,8 +82,9 @@ export default function GameHeader({
             color: accentColor,
             fontSize: width > 400 ? 22 : 18,
             fontWeight: '900',
-            letterSpacing: 3,
+            letterSpacing: 2,
             ...glowStyle(`${accentColor}80`),
+
           }}>
             {title.split('').join(' ')}
           </Text>
@@ -104,7 +105,7 @@ export default function GameHeader({
         {onSettings ? (
           <Pressable
             onPress={() => {
-              
+
               onSettings();
             }}
             style={({ pressed }) => iconBtnStyle(pressed)}

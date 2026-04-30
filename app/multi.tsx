@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Text, View, Alert } from 'react-native';
-import Toast from 'react-native-toast-message';
+import React, { useEffect, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 import GameHeader from '../components/Game/GameHeader';
 import PowerUpToolbar from '../components/Game/PowerUpToolbar';
 import MultiGrid from '../components/Grid/MultiGrid';
@@ -11,21 +11,20 @@ import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
+import Colors from '../constants/Colors';
 import { useAuth } from '../hooks/useAuth';
 import { useMultiWordGame } from '../hooks/useMultiWordGame';
 import { usePowerUps } from '../hooks/usePowerUps';
 import { useResponsive } from '../hooks/useResponsive';
 import { statsService } from '../services/statsService';
+import { inventoryService } from '../services/inventoryService';
 import { getWordByCategory } from '../services/wordService';
-import Colors from '../constants/Colors';
 
 const MULTI_ACCENT = Colors.modes.multi.accent;
 const MULTI_BG = Colors.modes.multi.background;
 
-// Points configuration
-const BASE_POINTS = 500;
-const CHAIN_BONUS = 250;
-const CLEAN_BONUS = 1500;
+// Scoring constants (mirror of useMultiWordGame for display purposes)
+const CLEAN_BONUS = 300;
 
 export default function MultiModeScreen() {
   const router = useRouter();
@@ -51,6 +50,9 @@ export default function MultiModeScreen() {
   const [startTime, setStartTime] = useState<number | null>(null);
 
   const [score, setScore] = useState(0);
+  const scoreRef = useRef(0);
+  // NOT: scoreRef artık doğrudan güncelleniyor (onGuessScored, onSuccess, startNewGame)
+  // useEffect ile sync kaldırıldı — stale closure önlenir
   const [revealedInfo, setRevealedInfo] = useState<string | null>(null);
   const [comboText, setComboText] = useState<string | null>(null);
 
@@ -94,18 +96,33 @@ export default function MultiModeScreen() {
     wordLength,
     maxRows: 9,
     onCombo: (multiplier) => {
-      setComboText(`COMBO x${multiplier}!`);
-      setScore(prev => prev + (CHAIN_BONUS * (multiplier - 1)));
+      setComboText(`🔥 COMBO x${multiplier}!`);
       setTimeout(() => setComboText(null), 2000);
     },
-    onSuccess: (stats) => {
-      // Clean Solution Bonus (Solved all in < 9 guesses)
-      let bonusPoints = 0;
-      if (stats.totalAttempts < 9) {
-        bonusPoints += CLEAN_BONUS;
+    onGuessScored: (event) => {
+      const total = event.letterPoints + event.wordBonus + event.comboBonus;
+      if (total > 0) {
+        // scoreRef'i HEMEN güncelle (onSuccess'te stale closure olmaması için)
+        scoreRef.current += total;
+        setScore(scoreRef.current);
+        // Animated score feedback
+        let feedback = '';
+        if (event.comboBonus > 0) feedback = `🔥 +${total} (COMBO!)`;
+        else if (event.wordSolved) feedback = `🎯 +${total} (Kelime!)`;
+        else if (event.letterPoints > 0) feedback = `✨ +${total}`;
+        if (feedback) {
+          setRevealedInfo(feedback);
+          setTimeout(() => setRevealedInfo(null), 1500);
+        }
       }
-
-      setScore(prev => prev + bonusPoints);
+    },
+    onSuccess: (stats) => {
+      // Clean Solution Bonus
+      const bonusPoints = stats.totalAttempts < 9 ? CLEAN_BONUS : 0;
+      const finalScore = scoreRef.current + bonusPoints;
+      // scoreRef'i hemen güncelle, sonra state'i
+      scoreRef.current = finalScore;
+      setScore(finalScore);
 
       if (user) {
         saveResultMutation.mutate({
@@ -115,14 +132,21 @@ export default function MultiModeScreen() {
           solved_at_row: stats.solvedAtRow,
           category,
           word_count: wordCount,
-          score: score + bonusPoints,
-          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
+          score: finalScore,
+          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0,
+          is_fair_play: stats.fairPlay?.isFairPlay ?? true,
         });
+        inventoryService.giveWinReward(user.id, 'multi').catch(() => {});
       }
+
+      if (bonusPoints > 0) {
+        setRevealedInfo(`🏆 +${bonusPoints} TEMİZ BİTİRME!`);
+      }
+
       setTimeout(() => {
         setResult({
           status: 'win',
-          guesses: stats.totalAttempts,
+          guesses: finalScore,
           isVisible: true,
           words,
           bonus: bonusPoints
@@ -130,6 +154,7 @@ export default function MultiModeScreen() {
       }, 1500);
     },
     onFail: (stats) => {
+      const finalScore = scoreRef.current;
       if (user) {
         saveResultMutation.mutate({
           mode: 'multi',
@@ -138,12 +163,25 @@ export default function MultiModeScreen() {
           solved_at_row: stats.solvedAtRow,
           category,
           word_count: wordCount,
-          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
+          score: finalScore,
+          duration_seconds: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0,
+          is_fair_play: stats.fairPlay?.isFairPlay ?? true,
         });
       }
       setTimeout(() => {
-        setResult({ status: 'lose', guesses: 9, isVisible: true, words });
+        setResult({ status: 'lose', guesses: finalScore, isVisible: true, words });
       }, 1500);
+    },
+    // Sadece oyun başladıktan sonra arka plan izle
+    isActive: !isSettingsVisible,
+    onFairPlayViolation: (reason: string) => {
+      Toast.show({
+        type: 'info',
+        text1: 'Adil Oyun Uyardı',
+        text2: reason,
+        position: 'top',
+        visibilityTime: 3000,
+      });
     },
   });
 
@@ -170,6 +208,7 @@ export default function MultiModeScreen() {
   const startNewGame = (selectedCategory: string, selectedLength: number, selectedCount: number = 4) => {
     setIsStarting(true);
     setScore(0);
+    scoreRef.current = 0;  // ref'i de sıfırla
     resetPowerUps({ hint: { count: 3 }, lightning: { count: 2 }, bomb: { count: 3 }, analysis: { count: 2 }, bridge: { count: 2 } });
     setRevealedInfo(null);
     setComboText(null);
@@ -193,6 +232,7 @@ export default function MultiModeScreen() {
       setWordCount(selectedCount);
       setGameId(p => p + 1);
       resetGameStates(newWords, selectedLength, 9);
+      setScore(0);
       setIsStarting(false);
       setIsSettingsVisible(false);
       setResult(prev => ({ ...prev, isVisible: false }));
@@ -332,9 +372,9 @@ export default function MultiModeScreen() {
                 borderColor: MULTI_ACCENT,
                 shadowColor: MULTI_ACCENT,
                 shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5,
-                shadowRadius: 10,
-                elevation: 5,
+                shadowOpacity: 0.6,
+                shadowRadius: 15,
+                elevation: 8,
               }}
             >
               <Text style={{
@@ -408,8 +448,9 @@ export default function MultiModeScreen() {
       <ResultModal
         isVisible={result.isVisible}
         status={result.status}
-        word={result.words.join(' • ')} // Using separator for cleaner look
+        word={result.words.join(' • ')}
         guesses={result.guesses}
+        category={category}
         mode="multi"
         extraData={`${solvedCount}/${wordCount}`}
         onRestart={() => setIsSettingsVisible(true)}

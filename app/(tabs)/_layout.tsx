@@ -1,12 +1,13 @@
-import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
 
 import { Tabs } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Colors from '../../constants/Colors';
 import AuthRequiredModal from '../../components/modal/AuthRequiredModal';
+import Colors from '../../constants/Colors';
 import { useAuth } from '../../hooks/useAuth';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export default function TabLayout() {
   const [isAuthModalVisible, setIsAuthModalVisible] = React.useState(false);
@@ -24,9 +25,9 @@ export default function TabLayout() {
           },
         }}
         tabBar={(props) => (
-          <CustomTabBar 
-            {...props} 
-            onShowAuthModal={() => setIsAuthModalVisible(true)} 
+          <CustomTabBar
+            {...props}
+            onShowAuthModal={() => setIsAuthModalVisible(true)}
           />
         )}
       >
@@ -67,9 +68,9 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-      <AuthRequiredModal 
-        isVisible={isAuthModalVisible} 
-        onClose={() => setIsAuthModalVisible(false)} 
+      <AuthRequiredModal
+        isVisible={isAuthModalVisible}
+        onClose={() => setIsAuthModalVisible(false)}
       />
     </>
   );
@@ -78,22 +79,24 @@ export default function TabLayout() {
 function CustomTabBar({ state, descriptors, navigation, onShowAuthModal }: any) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { moderateScale } = useResponsive();
 
   return (
     <View style={{
+      width: '100%',
       flexDirection: 'row',
       backgroundColor: '#0f0f0f',
       borderTopWidth: 1,
       borderTopColor: '#1c1c1e',
-      paddingBottom: Math.max(insets.bottom), // Use safe area inset for bottom padding
-      paddingTop: 12,
-      justifyContent: 'space-around',
+      paddingBottom: Math.max(insets.bottom, moderateScale(10)), 
+      paddingTop: moderateScale(12),
+      paddingHorizontal: moderateScale(8), // Dengeleme için eklendi
       alignItems: 'center',
     }}>
-      {state.routes.map((route: any, index: number) => {
+      {state.routes.filter((route: any) => descriptors[route.key].options.href !== null).map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         const label = options.title !== undefined ? options.title : route.name;
-        const isFocused = state.index === index;
+        const isFocused = state.routes[state.index].key === route.key;
 
         const onPress = () => {
           // Korumalı rotalar listesi
@@ -120,27 +123,29 @@ function CustomTabBar({ state, descriptors, navigation, onShowAuthModal }: any) 
 
         return (
           <Pressable
-            key={index}
+            key={route.key}
             onPress={onPress}
-            style={{ alignItems: 'center', gap: 4 }}
+            style={{ flex: 1, alignItems: 'center', gap: 4 }}
           >
             <View style={{
               backgroundColor: isFocused ? 'rgba(99, 153, 34, 0.1)' : 'transparent',
-              paddingHorizontal: 20,
-              paddingVertical: 6,
-              borderRadius: isFocused ? 16 : 0,
+              paddingHorizontal: moderateScale(20),
+              paddingVertical: moderateScale(6),
+              borderRadius: isFocused ? moderateScale(16) : 0,
+              alignItems: 'center',
             }}>
               <Ionicons
                 name={iconName}
-                size={24}
+                size={moderateScale(24)}
                 color={isFocused ? Colors.correct.main : Colors.textSecondary}
               />
             </View>
             <Text style={{
               color: isFocused ? Colors.correct.main : Colors.textSecondary,
-              fontSize: 10,
+              fontSize: moderateScale(10),
               fontWeight: '900',
               letterSpacing: 0.5,
+              textAlign: 'center'
             }}>
               {label}
             </Text>

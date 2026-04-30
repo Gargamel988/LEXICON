@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import { CellStatus, Row, BattleMove } from "../types";
-import { isValidWord } from "../utils/wordUtils";
-import { multiplayerService } from "../services/multiplayerService";
+import { useEffect, useRef, useState } from "react";
 import Toast from "react-native-toast-message";
+import { supabase } from "../lib/supabase";
+import { multiplayerService } from "../services/multiplayerService";
+import { BattleMove, CellStatus, Row } from "../types";
+import { isValidWord } from "../utils/wordUtils";
 
 interface UseBattleGameProps {
   roomId: string;
@@ -11,6 +11,7 @@ interface UseBattleGameProps {
   secretWord: string;
   onWin: (userId: string) => void;
   onOpponentMove: (payload: BattleMove) => void;
+  playerCount: number;
 }
 
 interface UseBattleGameReturn {
@@ -26,11 +27,14 @@ export const useBattleGame = ({
   userId,
   secretWord,
   onWin,
-  onOpponentMove
+  onOpponentMove,
+  playerCount,
 }: UseBattleGameProps): UseBattleGameReturn => {
   const [currentRow, setCurrentRow] = useState(0);
   const [currentGuess, setCurrentGuess] = useState("");
   const [isGameOver, setIsGameOver] = useState(false);
+  const [failedPlayers, setFailedPlayers] = useState<Set<string>>(new Set());
+  const channelRef = useRef<any>(null);
   const [grid, setGrid] = useState<Row[]>(
     new Array(6).fill(null).map((_, i) => ({
       id: `row-${i}`,
@@ -38,53 +42,119 @@ export const useBattleGame = ({
         char: "",
         status: "empty",
       })),
-    }))
+    })),
   );
 
   const wordLength = secretWord.length;
 
+  // Fonksiyon sızıntılarını önlemek için Ref kullanıyoruz
+  const onWinRef = useRef(onWin);
+  const onOpponentMoveRef = useRef(onOpponentMove);
+
+  useEffect(() => {
+    onWinRef.current = onWin;
+    onOpponentMoveRef.current = onOpponentMove;
+  }, [onWin, onOpponentMove]);
+
   // Realtime Broadcast Channel
   useEffect(() => {
-    const channel = supabase.channel(`battle:${roomId}`)
-      .on('broadcast', { event: 'move' }, ({ payload }: { payload: BattleMove }) => {
-        if (payload.userId !== userId) {
-          onOpponentMove(payload);
-        }
-      })
-      .on('broadcast', { event: 'win' }, ({ payload }) => {
+    // roomId geçici veya boşsa abonelik açma. secretWord henüz gelmediyse (APPLE fallback ise) bekle.
+    if (!roomId || !userId || !secretWord || secretWord === "APPLE") {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`battle:${roomId}`)
+      .on(
+        "broadcast",
+        { event: "move" },
+        ({ payload }: { payload: BattleMove }) => {
+          if (payload.userId !== userId) {
+            onOpponentMoveRef.current(payload);
+          }
+        },
+      )
+      .on("broadcast", { event: "win" }, ({ payload }) => {
         setIsGameOver(true);
-        onWin(payload.userId);
+        onWinRef.current(payload.userId);
       })
-      .subscribe();
+      .on("broadcast", { event: "fail" }, ({ payload }) => {
+        setFailedPlayers((prev) => {
+          const next = new Set(prev);
+          next.add(payload.userId);
+          return next;
+        });
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
     };
   }, [roomId, userId, secretWord]);
 
   const sendMove = (rowIndex: number, statuses: CellStatus[]) => {
-    supabase.channel(`battle:${roomId}`).send({
-      type: 'broadcast',
-      event: 'move',
-      payload: {
-        userId,
-        rowIndex,
-        pattern: statuses
-      }
-    });
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "move",
+        payload: {
+          userId,
+          rowIndex,
+          pattern: statuses,
+        },
+      });
+    }
   };
 
   const sendWin = async () => {
     // Önce DB'yi güncelle (Tie-breaker logic)
     await multiplayerService.setWinner(roomId, userId);
-    
+
     // Sonra Broadcaster ile ilan et (Anlık efekt için)
-    supabase.channel(`battle:${roomId}`).send({
-      type: 'broadcast',
-      event: 'win',
-      payload: { userId }
-    });
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "win",
+        payload: { userId },
+      });
+    }
   };
+
+  const sendFail = () => {
+    setFailedPlayers((prev) => {
+      const next = new Set(prev);
+      next.add(userId);
+      return next;
+    });
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "fail",
+        payload: { userId },
+      });
+    }
+  };
+
+  // Check for Draw (Infinite Loop Prevention)
+  useEffect(() => {
+    // Eğer oyun zaten bittiyse veya yeterli oyuncu yoksa işlem yapma
+    if (isGameOver || !roomId || roomId === "") return;
+
+    if (playerCount > 0 && failedPlayers.size >= playerCount) {
+      console.log("[BattleDebug] Beraberlik tespit edildi, sonlandırılıyor...");
+      setIsGameOver(true);
+      multiplayerService.setDraw(roomId);
+      onWinRef.current("draw");
+    }
+  }, [failedPlayers.size, playerCount, roomId, isGameOver]);
 
   const handleKeyPress = (key: string) => {
     if (isGameOver) return;
@@ -92,8 +162,8 @@ export const useBattleGame = ({
     if (key === "ENTER") {
       if (currentGuess.length === wordLength) {
         if (!isValidWord(currentGuess)) {
-           Toast.show({ type: 'error', text1: 'Geçersiz Kelime' });
-           return;
+          Toast.show({ type: "error", text1: "Geçersiz Kelime" });
+          return;
         }
 
         const targetChars = secretWord.split("");
@@ -101,7 +171,9 @@ export const useBattleGame = ({
         const statuses: CellStatus[] = Array(wordLength).fill("absent");
         const remainingCounts: Record<string, number> = {};
 
-        targetChars.forEach(c => remainingCounts[c] = (remainingCounts[c] || 0) + 1);
+        targetChars.forEach(
+          (c) => (remainingCounts[c] = (remainingCounts[c] || 0) + 1),
+        );
         guessChars.forEach((c, i) => {
           if (c === targetChars[i]) {
             statuses[i] = "correct";
@@ -109,7 +181,11 @@ export const useBattleGame = ({
           }
         });
         guessChars.forEach((c, i) => {
-          if (statuses[i] !== "correct" && remainingCounts[c] > 0 && targetChars.includes(c)) {
+          if (
+            statuses[i] !== "correct" &&
+            remainingCounts[c] > 0 &&
+            targetChars.includes(c)
+          ) {
             statuses[i] = "present";
             remainingCounts[c]--;
           }
@@ -118,7 +194,10 @@ export const useBattleGame = ({
         const newGrid = [...grid];
         newGrid[currentRow] = {
           ...newGrid[currentRow],
-          cells: guessChars.map((char, index) => ({ char, status: statuses[index] }))
+          cells: guessChars.map((char, index) => ({
+            char,
+            status: statuses[index],
+          })),
         };
         setGrid(newGrid);
 
@@ -131,16 +210,16 @@ export const useBattleGame = ({
           setIsGameOver(true);
         } else if (currentRow === 5) {
           setIsGameOver(true);
-          // Lose logic handled by checking if opponent wins
+          sendFail();
         } else {
-          setCurrentRow(prev => prev + 1);
+          setCurrentRow((prev) => prev + 1);
           setCurrentGuess("");
         }
       }
     } else if (key === "⌫") {
-      setCurrentGuess(prev => prev.slice(0, -1));
+      setCurrentGuess((prev) => prev.slice(0, -1));
     } else if (currentGuess.length < wordLength) {
-      setCurrentGuess(prev => prev + key);
+      setCurrentGuess((prev) => prev + key);
     }
   };
 
@@ -149,6 +228,6 @@ export const useBattleGame = ({
     currentRow,
     currentGuess,
     isGameOver,
-    handleKeyPress
+    handleKeyPress,
   };
 };

@@ -1,10 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, AppStateStatus } from "react-native";
 import Toast from "react-native-toast-message";
 import { CellStatus, Row } from "../types";
 import { toUpperTurkish } from "../utils/stringUtils";
 import { isValidWord } from "../utils/wordUtils";
+import { useFairPlay } from "./useFairPlay";
 
 interface UseWordGameProps {
   word: string;
@@ -18,6 +18,8 @@ interface UseWordGameProps {
   onFairPlayViolation?: (reason: string) => void;
   isBlind?: boolean;
   isRadarActive?: boolean;
+  /** Sadece true olduğunda arka plan tespiti çalışır (oyun aktifken, settings modal kapalıyken) */
+  isActive?: boolean;
 }
 
 export const useWordGame = ({
@@ -32,6 +34,7 @@ export const useWordGame = ({
   onFairPlayViolation,
   isBlind = false,
   isRadarActive = false,
+  isActive = true,  // Varsayılan true: mevcut modlar değişmeden çalışır
 }: UseWordGameProps) => {
   const generateRow = useCallback(
     (length: number, index: number) => ({
@@ -65,13 +68,18 @@ export const useWordGame = ({
     Record<string, CellStatus>
   >({});
 
-  // Fair Play State
-  const [backgroundCount, setBackgroundCount] = useState(0);
-  const [backgroundTotalTime, setBackgroundTotalTime] = useState(0);
-  const [isFairPlay, setIsFairPlay] = useState(true);
-
-  const appState = useRef(AppState.currentState);
-  const backgroundStartTime = useRef<number | null>(null);
+  // Fair Play — useFairPlay hook'u ile yönetilir
+  const {
+    isFairPlay,
+    backgroundCount,
+    backgroundTotalTime,
+    resetFairPlay,
+    getFairPlayData,
+  } = useFairPlay({
+    isActive,
+    isGameOver,
+    onViolation: onFairPlayViolation,
+  });
 
   const currentGuessRef = useRef(currentGuess);
   const wordRef = useRef(word);
@@ -104,49 +112,6 @@ export const useWordGame = ({
     isRiskModeActive,
     penaltyRows,
   ]);
-
-  // AppState monitoring for Fair Play
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === "active"
-      ) {
-        // App returned to foreground
-        if (backgroundStartTime.current) {
-          const duration = (Date.now() - backgroundStartTime.current) / 1000;
-          
-          // Grace period of 3 seconds (accidental swipes, checking time etc.)
-          if (duration > 3) {
-            setBackgroundTotalTime((prev) => prev + duration);
-            
-            // If total background time > 10s or exits > 3, flag as unfair
-            if (backgroundTotalTime + duration > 10 || backgroundCount >= 2) {
-              setIsFairPlay(false);
-              onFairPlayViolation?.("Arka plana çok fazla çıkış tespit edildi.");
-            }
-          }
-          backgroundStartTime.current = null;
-        }
-      }
-
-      if (nextAppState === "background") {
-        // App went to background
-        if (!isGameOver) {
-          setBackgroundCount((prev) => prev + 1);
-          backgroundStartTime.current = Date.now();
-        }
-      }
-
-      appState.current = nextAppState;
-    };
-
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isGameOver, backgroundTotalTime, backgroundCount, onFairPlayViolation]);
 
   // Calculate keyboard letter statuses efficiently
   const letterStatuses = useMemo(() => {
@@ -215,12 +180,9 @@ export const useWordGame = ({
       setPenaltyRows(0);
       setIsRiskModeActive(false);
       setAnalysisStatuses({});
-      setBackgroundCount(0);
-      setBackgroundTotalTime(0);
-      setIsFairPlay(true);
-      backgroundStartTime.current = null;
+      resetFairPlay(); // useFairPlay sıfırlama
     },
-    [maxRows, wordLength],
+    [maxRows, wordLength, resetFairPlay],
   );
 
   const handleKeyPress = useCallback(
@@ -312,11 +274,7 @@ export const useWordGame = ({
               totalPoints *= 2;
               onRiskSuccess?.();
             }
-            onSuccess?.(totalPoints, currentRowValue + 1, {
-              isFairPlay,
-              backgroundCount,
-              backgroundTotalTime: Math.round(backgroundTotalTime)
-            });
+            onSuccess?.(totalPoints, currentRowValue + 1, getFairPlayData());
           } else {
             const correctPos = statuses.filter((s) => s === "correct").length;
             const correctLetters = statuses.filter(
@@ -333,11 +291,7 @@ export const useWordGame = ({
               setIsWaiting(true);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
               onScoreUpdate?.(roundScore - 100);
-              onFail?.(currentRowValue + 1, {
-                isFairPlay,
-                backgroundCount,
-                backgroundTotalTime: Math.round(backgroundTotalTime)
-              });
+              onFail?.(currentRowValue + 1, getFairPlayData());
             } else {
               onScoreUpdate?.(roundScore);
 

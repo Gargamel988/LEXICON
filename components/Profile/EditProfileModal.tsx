@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   Image,
   ActivityIndicator,
 } from 'react-native';
@@ -18,6 +17,16 @@ import Colors from '@/constants/Colors';
 import { useResponsive } from '@/hooks/useResponsive';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase';
+import { AvatarWithFrame } from '../Cosmetics/AvatarWithFrame';
+import { FrameDef, FRAMES } from "@/constants/frames";
+import { Title, TITLES, getTitleStyle } from "@/constants/titles";
+import { NAMETAGS } from '@/constants/nametags';
+ 
+const PRESET_AVATARS = [
+  '👤', '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', 
+  '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐥', '🐺', '🐗', '🐴', '🦄',
+  '🥷', '🧙', '🧛', '🧟', '🧞', '🧜', '🧚', '👼', '🦸', '🦹'
+];
 
 interface EditProfileModalProps {
   isVisible: boolean;
@@ -27,16 +36,17 @@ interface EditProfileModalProps {
   currentAvatar: string;
   onSave: (name: string, avatar: string) => void;
   isLoading: boolean;
+  activeFrame?: FrameDef | null;
+  activeTitle?: Title | null;
+  activeNameTag?: string | null;
+  ownedTitles?: Title[];
+  ownedCosmetics?: string[];
+  onSaveTitle: (titleId: string | null) => void;
+  onSaveFrame: (frameId: string) => void;
+  onSaveNameTag: (nametagId: string | null) => void;
 }
 
-const AVATARS = [
-  '🦊', '🐼', '🦁', '🐨', '🐸', 
-  '🚀', '⭐', '🔥', '💎', '🎮',
-  '🧙', '🥷', '🤴', '🧚', '🦄',
-  '🌈', '⚡', '🍀', '🍎', '🍕'
-];
-
-export const EditProfileModal = ({
+export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   isVisible,
   onClose,
   userId,
@@ -44,9 +54,17 @@ export const EditProfileModal = ({
   currentAvatar,
   onSave,
   isLoading: isParentLoading,
-}: EditProfileModalProps) => {
+  activeFrame,
+  activeTitle,
+  activeNameTag,
+  ownedTitles = [],
+  ownedCosmetics = [],
+  onSaveTitle,
+  onSaveFrame,
+  onSaveNameTag,
+}) => {
   const [name, setName] = useState(currentName);
-  const [selectedAvatar, setSelectedAvatar] = useState(currentAvatar || AVATARS[0]);
+  const [selectedAvatar, setSelectedAvatar] = useState(currentAvatar);
   const [isUploading, setIsUploading] = useState(false);
   const { scale, moderateScale, verticalScale } = useResponsive();
 
@@ -119,42 +137,76 @@ export const EditProfileModal = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <BlurView intensity={20} tint="dark" style={styles.container}>
-          <View style={[styles.content, { padding: moderateScale(24) }]}>
+        <BlurView intensity={20} tint="dark" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ width: '90%', backgroundColor: '#15151b', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: moderateScale(24) }}>
             {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.title}>PROFİLİ DÜZENLE</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ color: Colors.accent, fontSize: 18, fontWeight: '900', letterSpacing: 1.5 }}>PROFİLİ DÜZENLE</Text>
               <TouchableOpacity onPress={onClose} disabled={isLoading}>
                 <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
 
             {/* Avatar Preview */}
-            <View style={styles.previewContainer}>
-              <View style={[styles.avatarPreview, { width: scale(80), height: scale(80), borderRadius: scale(20) }]}>
+            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+              <View style={{ width: scale(80), height: scale(80), justifyContent: 'center', alignItems: 'center' }}>
                 {isUploading ? (
                   <ActivityIndicator color={Colors.accent} size="large" />
-                ) : selectedAvatar.startsWith('http') ? (
-                  <Image source={{ uri: selectedAvatar }} style={{ width: '100%', height: '100%', borderRadius: scale(20) }} />
                 ) : (
-                  <Text style={{ fontSize: scale(40) }}>{selectedAvatar}</Text>
+                  <AvatarWithFrame 
+                    avatarUrl={selectedAvatar} 
+                    frameId={activeFrame?.id || 'frame_default'} 
+                    size={scale(80) * 0.9} 
+                  />
                 )}
               </View>
               <TouchableOpacity 
-                style={styles.galleryButton} 
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', gap: 6 }} 
                 onPress={pickImage}
                 disabled={isUploading}
               >
                 <Ionicons name="image-outline" size={16} color={Colors.accent} />
-                <Text style={styles.galleryButtonText}>GALERİDEN SEÇ</Text>
+                <Text style={{ color: Colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>GALERİDEN SEÇ</Text>
               </TouchableOpacity>
+ 
+              {/* Preset Avatars */}
+              <View style={{ marginTop: 20, width: '100%' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5, textAlign: 'center' }}>VEYA BİR İKON SEÇ</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingHorizontal: 4 }}
+                >
+                  {PRESET_AVATARS.map((emoji) => {
+                    const isSelected = selectedAvatar === emoji;
+                    return (
+                      <TouchableOpacity
+                        key={emoji}
+                        onPress={() => setSelectedAvatar(emoji)}
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 22,
+                          backgroundColor: isSelected ? 'rgba(255,214,0,0.2)' : 'rgba(255,255,255,0.05)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 2,
+                          borderColor: isSelected ? Colors.accent : 'transparent'
+                        }}
+                      >
+                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </View>
 
             {/* Name Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>GÖRÜNÜM ADI</Text>
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5 }}>GÖRÜNÜM ADI</Text>
               <TextInput
-                style={[styles.input, { height: verticalScale(50) }]}
+                style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, color: '#fff', paddingHorizontal: 16, fontSize: 16, fontWeight: '600', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: verticalScale(50) }}
                 value={name}
                 onChangeText={setName}
                 placeholder="İsmini gir..."
@@ -164,35 +216,127 @@ export const EditProfileModal = ({
               />
             </View>
 
-            {/* Avatar Selection Grid */}
-            <Text style={styles.inputLabel}>AVATAR LİSTESİ</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.avatarGrid}
-            >
-              {AVATARS.map((avatar) => (
+            {/* Title Selection */}
+            {ownedTitles.length > 0 && (
+              <View style={{ marginBottom: verticalScale(16) }}>
+                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5 }}>UNVAN SEÇİMİ</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: scale(8), paddingVertical: verticalScale(2) }}
+                >
+                  <TouchableOpacity
+                    onPress={() => onSaveTitle(null)}
+                    style={[
+                      { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+                      !activeTitle && { borderColor: Colors.accent, backgroundColor: 'rgba(255,214,0,0.15)' }
+                    ]}
+                  >
+                    <Text style={[{ fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }, { color: 'rgba(255,255,255,0.4)' }]}>YOK</Text>
+                  </TouchableOpacity>
+
+                  {ownedTitles.map((title) => {
+                    const titleStyle = getTitleStyle(title.id);
+                    const isSelected = activeTitle?.id === title.id;
+                    return (
+                      <TouchableOpacity
+                        key={title.id}
+                        onPress={() => onSaveTitle(title.id)}
+                        style={[
+                          { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+                          isSelected && { borderColor: title.color, backgroundColor: `${title.color}20` }
+                        ]}
+                      >
+                        <Text style={[
+                          { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }, 
+                          titleStyle
+                        ]}>
+                          {title.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Frame Selection */}
+            <View style={{ marginBottom: verticalScale(16) }}>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5 }}>ÇERÇEVE SEÇİMİ</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: scale(10), paddingVertical: verticalScale(2) }}
+              >
+                {FRAMES.filter(f => ownedCosmetics.includes(f.id)).map((frame) => {
+                  const isSelected = activeFrame?.id === frame.id;
+                  return (
+                    <TouchableOpacity
+                      key={frame.id}
+                      onPress={() => onSaveFrame(frame.id)}
+                      style={[
+                        { width: scale(50), height: scale(50), borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+                        isSelected && { borderColor: frame.color, backgroundColor: `${frame.color}20` }
+                      ]}
+                    >
+                      <Image 
+                        source={frame.source} 
+                        style={{ width: '100%', height: '100%', transform: [{ scale: 0.8 }] }} 
+                        resizeMode="contain" 
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Nametag Selection */}
+            <View style={{ marginBottom: verticalScale(16) }}>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5 }}>İSİMLİK SEÇİMİ</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: scale(10), paddingVertical: verticalScale(2) }}
+              >
                 <TouchableOpacity
-                  key={avatar}
-                  onPress={() => setSelectedAvatar(avatar)}
+                  onPress={() => onSaveNameTag(null)}
                   style={[
-                    styles.avatarOption,
-                    { width: scale(50), height: scale(50), borderRadius: scale(12) },
-                    selectedAvatar === avatar && styles.selectedAvatar
+                    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+                    !activeNameTag && { borderColor: Colors.accent, backgroundColor: 'rgba(255,214,0,0.15)' }
                   ]}
                 >
-                  <Text style={{ fontSize: scale(24) }}>{avatar}</Text>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>VARSAYILAN</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+
+                {NAMETAGS.filter(n => ownedCosmetics.includes(n.id)).map((tag) => {
+                  const isSelected = activeNameTag === tag.id;
+                  return (
+                    <TouchableOpacity
+                      key={tag.id}
+                      onPress={() => onSaveNameTag(tag.id)}
+                      style={[
+                        { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+                        isSelected && { borderColor: Colors.accent, backgroundColor: 'rgba(255,214,0,0.1)' }
+                      ]}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{tag.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
             {/* Action Buttons */}
             <TouchableOpacity
-              style={[styles.saveButton, { height: verticalScale(55) }, isLoading && { opacity: 0.7 }]}
+              style={[
+                { backgroundColor: Colors.accent, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 24, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 }, 
+                { height: verticalScale(55) }, 
+                isLoading && { opacity: 0.7 }
+              ]}
               onPress={handleSave}
               disabled={isLoading || name.trim().length === 0}
             >
-              <Text style={styles.saveButtonText}>
+              <Text style={{ color: '#000', fontSize: 16, fontWeight: '900', letterSpacing: 1 }}>
                 {isLoading ? 'KAYDEDİLİYOR...' : 'DEĞİŞİKLİKLERİ KAYDET'}
               </Text>
             </TouchableOpacity>
@@ -203,119 +347,3 @@ export const EditProfileModal = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  content: {
-    width: '90%',
-    backgroundColor: '#15151b',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    color: Colors.accent,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  previewContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  avatarPreview: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.accent,
-    marginBottom: 12,
-  },
-  previewLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 11,
-    fontWeight: '800',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
-    color: '#fff',
-    paddingHorizontal: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  avatarGrid: {
-    paddingVertical: 10,
-    gap: 12,
-  },
-  avatarOption: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  selectedAvatar: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accent + '20',
-    borderWidth: 2,
-  },
-  saveButton: {
-    backgroundColor: Colors.accent,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  saveButtonText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  galleryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    gap: 6,
-  },
-  galleryButtonText: {
-    color: Colors.accent,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-});

@@ -14,9 +14,11 @@ import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
 import { useAuth } from '../hooks/useAuth';
+import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
 import { useResponsive } from '../hooks/useResponsive';
 import { useWordGame } from '../hooks/useWordGame';
+import { inventoryService } from '../services/inventoryService';
 import { statsService } from '../services/statsService';
 import { getWordByCategory } from '../services/wordService';
 import Colors from '../constants/Colors';
@@ -30,6 +32,7 @@ export default function TimedGameScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const { getStock } = useInventory(user?.id);
     const { wp, moderateScale } = useResponsive();
     const setPowerUpStatesRef = useRef<any>(null);
 
@@ -52,22 +55,19 @@ export default function TimedGameScreen() {
     const [isFrozen, setIsFrozen] = useState(false);
 
     const { configs: powerUpConfigs, setStates: setPowerUpStates, resetPowerUps } = usePowerUps(['hint', 'bomb', 'freeze', 'skip', 'lightning', 'risk'], {
-        hint: { count: 3 },
-        bomb: { count: 2 },
-        freeze: { count: 2 },
-        skip: { count: 3 },
-        lightning: { count: 2 },
-        risk: { count: 1, isActive: false }
+        hint: { count: getStock('hint') }, bomb: { count: getStock('bomb') }, freeze: { count: getStock('freeze') }, skip: { count: getStock('skip') }, lightning: { count: getStock('lightning') }, risk: { count: getStock('risk'), isActive: false }
     }, (key) => {
-        if (key === 'hint') return handleHint();
-        if (key === 'bomb') return handleBomb();
-        if (key === 'freeze') return handleFreeze();
-        if (key === 'skip') return handleSkip();
-        if (key === 'lightning') return handleLightning();
-        if (key === 'risk') {
-            setIsRiskModeActive(!isRiskModeActive);
-            return 'toggle';
+        let result: boolean | 'toggle' | undefined = undefined;
+        if (key === 'hint') result = handleHint();
+        else if (key === 'bomb') result = handleBomb();
+        else if (key === 'freeze') result = handleFreeze();
+        else if (key === 'skip') result = handleSkip();
+        else if (key === 'lightning') result = handleLightning();
+        else if (key === 'risk') { setIsRiskModeActive(!isRiskModeActive); result = 'toggle'; }
+        if (result !== false && result !== undefined && user) {
+            inventoryService.usePowerUp(user.id, key as any).catch(() => {});
         }
+        return result;
     });
 
     useEffect(() => {
@@ -107,6 +107,9 @@ export default function TimedGameScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
         if (user) {
+            if (solvedCountRef.current > 0 && isSessionFairPlay) {
+                inventoryService.giveWinReward(user.id, 'blitz').catch(() => {});
+            }
             saveResultMutation.mutate({
                 mode: 'blitz',
                 score: scoreRef.current,
@@ -195,6 +198,8 @@ export default function TimedGameScreen() {
                 startNextWord();
             }, 1500);
         },
+        // Sadece oyun başladıktan sonra arka plan izle
+        isActive: isReady && !isGameOver,
     });
 
     const handleHint = () => {
@@ -285,7 +290,7 @@ export default function TimedGameScreen() {
         setSelectedCategory(category);
         setIsReady(true);
         startNextWord(category);
-        resetPowerUps({ hint: { count: 3 }, bomb: { count: 2 }, freeze: { count: 2 }, skip: { count: 2 }, lightning: { count: 2 }, risk: { count: 2 } });
+        resetPowerUps({ hint: { count: getStock('hint') }, bomb: { count: getStock('bomb') }, freeze: { count: getStock('freeze') }, skip: { count: getStock('skip') }, lightning: { count: getStock('lightning') }, risk: { count: getStock('risk'), isActive: false } });
         startTimer();
     };
 
@@ -293,7 +298,7 @@ export default function TimedGameScreen() {
         if (timerInterval.current) clearInterval(timerInterval.current);
         timerProgress.value = 1;
         setTimeLeft(GAME_TIME);
-        resetPowerUps({ hint: { count: 3 }, bomb: { count: 2 }, freeze: { count: 2 }, skip: { count: 2 }, lightning: { count: 2 }, risk: { count: 2 } });
+        resetPowerUps({ hint: { count: getStock('hint') }, bomb: { count: getStock('bomb') }, freeze: { count: getStock('freeze') }, skip: { count: getStock('skip') }, lightning: { count: getStock('lightning') }, risk: { count: getStock('risk'), isActive: false } });
 
         setScore(0);
         setSolvedCount(0);
@@ -400,12 +405,13 @@ export default function TimedGameScreen() {
                 status={solvedCount > 0 ? "win" : "lose"}
                 word={currentWord}
                 guesses={score}
+                category={selectedCategory}
                 extraData={solvedCount}
                 isFairPlay={isSessionFairPlay}
                 backgroundStats={sessionBackgroundStats}
                 onRestart={resetTimedGame}
                 onHome={() => router.replace('/')}
-                mode="timed"
+                mode="blitz"
             />
         </GameLayout>
     );

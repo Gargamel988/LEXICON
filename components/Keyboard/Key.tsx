@@ -1,7 +1,7 @@
 import { useResponsive } from '@/hooks/useResponsive';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -76,7 +76,7 @@ const Key: React.FC<KeyProps> = ({ label, onPress, status, statuses, isBlind, wi
     const boxHeight = count <= 2 ? '50%' : count <= 4 ? '50%' : '33.33%';
 
     return (
-      <View style={{ ...StyleSheet.absoluteFillObject, flexDirection: flexDir, flexWrap: wrap, borderRadius: scale(4), overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: flexDir, flexWrap: wrap, borderRadius: scale(4), overflow: 'hidden' }}>
         {statuses.map((s, i) => (
           <View
             key={i}

@@ -2,35 +2,64 @@ import { useWindowDimensions } from "react-native";
 
 /**
  * useResponsive Hook
- * Designed specifically for the Word Game grid and premium UI.
- * Handles scaling for fonts, padding, and game-specific metrics like cell sizes.
+ * Tasarımın farklı ekran boyutlarında (Telefon, Tablet) tutarlı görünmesini sağlar.
  */
-export const useResponsive = () => {
+
+interface Spacing {
+  xs: number;
+  sm: number;
+  md: number;
+  lg: number;
+  xl: number;
+}
+
+interface ResponsiveHook {
+  width: number;
+  height: number;
+  isSmallDevice: boolean;
+  isTablet: boolean;
+  scale: (size: number) => number;
+  verticalScale: (size: number) => number;
+  moderateScale: (size: number, factor?: number) => number;
+  cellSize: number;
+  getCellSize: (letterCount?: number) => number;
+  spacing: Spacing;
+  wp: (percent: number) => number;
+  hp: (percent: number) => number;
+  getKeyWidth: (maxKeysInRow?: number) => number;
+  KEY_GAP: number;
+  KEY_ROW_GAP: number;
+}
+
+export const useResponsive = (): ResponsiveHook => {
   const { width, height } = useWindowDimensions();
 
-  // Guidance values based on iPhone X (375x812)
+  // Tasarım baz alınan cihaz: iPhone X (375x812)
   const guidelineBaseWidth = 375;
   const guidelineBaseHeight = 812;
 
-  // Scale functions
+  // Genişliğe göre ölçekleme
   const scale = (size: number) => (width / guidelineBaseWidth) * size;
+  
+  // Yüksekliğe göre ölçekleme
   const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
+  
+  // Moderate scale (faktör ile yumuşatılmış ölçekleme)
   const moderateScale = (size: number, factor = 0.5) =>
     size + (scale(size) - size) * factor;
 
-  // Device type flags
+  // Cihaz tipi bayrakları
   const isSmallDevice = width < 360;
   const isTablet = width >= 600;
 
-  // Game Grid Metrics (Default 5 letter word)
-  // Logic: 5 cells + 4 gaps of 8px + 40px outer padding
+  // Oyun Izgarası Ölçüleri
   const getCellSize = (letterCount: number = 5) => {
-    const totalOuterPadding = 48; // 24px each side
+    const totalOuterPadding = 48; // 24px her iki yan
     const totalGapPadding = (letterCount - 1) * 8;
     const availableWidth = width - totalOuterPadding - totalGapPadding;
     const size = availableWidth / letterCount;
 
-    // Safety cap for extremely large screens/tablets to prevent massive cells
+    // Tabletlerde veya çok geniş ekranlarda hücrelerin devasa olmasını engelle
     return Math.min(size, 75);
   };
 
@@ -42,8 +71,8 @@ export const useResponsive = () => {
     scale,
     verticalScale,
     moderateScale,
-    cellSize: getCellSize(), // Default cell size for 5 letters
-    getCellSize, // Function for dynamic word lengths
+    cellSize: getCellSize(),
+    getCellSize,
     spacing: {
       xs: verticalScale(4),
       sm: verticalScale(8),
@@ -51,11 +80,11 @@ export const useResponsive = () => {
       lg: verticalScale(24),
       xl: verticalScale(32),
     },
-    // Percentage helpers
+    // Yüzdesel genişlik/yükseklik yardımcıları
     wp: (percent: number) => (width * percent) / 100,
     hp: (percent: number) => (height * percent) / 100,
 
-    // Keyboard Specific Metrics
+    // Klavye Ölçüleri
     getKeyWidth: (maxKeysInRow: number = 10) => {
       const horizontalPadding = scale(20);
       const keyGap = scale(5);

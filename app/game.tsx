@@ -11,8 +11,10 @@ import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
 import { useAuth } from '../hooks/useAuth';
+import { useInventory } from '../hooks/useInventory';
 import { PowerUpStates, usePowerUps } from '../hooks/usePowerUps';
 import { useWordGame } from '../hooks/useWordGame';
+import { inventoryService } from '../services/inventoryService';
 import { statsService } from '../services/statsService';
 import { getWordByCategory } from '../services/wordService';
 import Colors from '../constants/Colors';
@@ -24,6 +26,7 @@ export default function GameScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { getStock } = useInventory(user?.id);
   const setPowerUpStatesRef = React.useRef<React.Dispatch<React.SetStateAction<PowerUpStates>> | null>(null);
 
   const [gameId, setGameId] = useState(0);
@@ -64,6 +67,9 @@ export default function GameScreen() {
     return () => clearTimeout(t);
   }, []);
 
+  // isSettingsVisible'ı useWordGame'den önce tanımla (isActive prop'u için gerekli)
+  const [isSettingsVisible, setIsSettingsVisible] = useState(true);
+
   const {
     grid,
     currentRow,
@@ -94,6 +100,11 @@ export default function GameScreen() {
         duration_seconds: duration,
         is_fair_play: fairPlayData?.isFairPlay
       });
+
+      // Elmas ödülü (fair play ise)
+      if (user && fairPlayData?.isFairPlay !== false) {
+        inventoryService.giveWinReward(user.id, 'classic').catch(() => {});
+      }
 
       setTimeout(() => {
         setResult({ 
@@ -133,31 +144,36 @@ export default function GameScreen() {
         });
       }, 1500);
     },
+    // Sadece oyun aktifken (settings modal kapalıyken) arka plan izle
+    isActive: !isSettingsVisible,
   });
-
-  const [isSettingsVisible, setIsSettingsVisible] = useState(true);
 
   const { configs: powerUpConfigs, resetPowerUps, setStates: setPowerUpStates } = usePowerUps(
     ['hint', 'bomb', 'joker', 'veto', 'mirror'],
     {
-      hint: { count: 2 },
-      bomb: { count: 1 },
-      joker: { count: 2 },
-      veto: { count: 1 },
-      mirror: { count: 1 }
+      hint: { count: getStock('hint') },
+      bomb: { count: getStock('bomb') },
+      joker: { count: getStock('joker') },
+      veto: { count: getStock('veto') },
+      mirror: { count: getStock('mirror') }
     },
     (key) => {
-      if (key === 'hint') return getHint();
-      if (key === 'bomb') return useBomb();
-      if (key === 'joker') {
-        if (currentGuess.length > 0) return useJoker(currentGuess[currentGuess.length - 1]);
-        return false;
+      let result: boolean | 'toggle' | undefined = undefined;
+      if (key === 'hint') result = getHint();
+      else if (key === 'bomb') result = useBomb();
+      else if (key === 'joker') {
+        if (currentGuess.length > 0) result = useJoker(currentGuess[currentGuess.length - 1]);
+        else return false;
+      } else if (key === 'veto') {
+        if (currentRow > 0) result = useVeto();
+        else return false;
+      } else if (key === 'mirror') result = useMirror();
+
+      // Envanter sync (fire-and-forget)
+      if (result !== false && result !== undefined && user) {
+        inventoryService.usePowerUp(user.id, key as any).catch(() => {});
       }
-      if (key === 'veto') {
-        if (currentRow > 0) return useVeto();
-        return false;
-      }
-      if (key === 'mirror') return useMirror();
+      return result;
     }
   );
 
@@ -174,11 +190,11 @@ export default function GameScreen() {
     setGameId(p => p + 1);
     resetGameStates(6, newWord.length);
     resetPowerUps({
-      hint: { count: 2 },
-      bomb: { count: 1 },
-      joker: { count: 2 },
-      veto: { count: 1 },
-      mirror: { count: 1 }
+      hint: { count: getStock('hint') },
+      bomb: { count: getStock('bomb') },
+      joker: { count: getStock('joker') },
+      veto: { count: getStock('veto') },
+      mirror: { count: getStock('mirror') }
     });
     setIsSettingsVisible(false);
     setResult(prev => ({ ...prev, isVisible: false }));
@@ -245,6 +261,8 @@ export default function GameScreen() {
         status={result.status}
         word={word}
         guesses={result.guesses}
+        grid={grid}
+        category={category}
         isFairPlay={result.isFairPlay}
         backgroundStats={result.backgroundStats}
         onRestart={() => startNewGame(category, wordLength)}

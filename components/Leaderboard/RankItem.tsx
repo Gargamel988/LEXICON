@@ -1,30 +1,38 @@
-import { View, Text, Image, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { FREE_FRAME_ID } from '../../constants/frames';
 import { useResponsive } from '../../hooks/useResponsive';
+import { AvatarWithFrame } from '../Cosmetics/AvatarWithFrame';
+import { UserDisplayName } from '../Cosmetics/UserDisplayName';
 
 interface RankItemProps {
   rank: number;
   username: string;
   score: string;
   avatar_url?: string;
+  active_frame?: string;
+  active_nametag?: string | null;
+  active_title?: string | null;
   isCurrentUser?: boolean;
   accentColor?: string;
   onPress?: () => void;
 }
 
-export const RankItem = ({ 
-  rank, 
-  username, 
-  score, 
-  avatar_url, 
-  isCurrentUser, 
+export const RankItem = ({
+  rank,
+  username,
+  score,
+  avatar_url,
+  active_frame,
+  active_nametag,
+  active_title,
+  isCurrentUser,
   accentColor = '#4CAF50',
   onPress
 }: RankItemProps) => {
   const { wp, moderateScale, spacing } = useResponsive();
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       style={{
@@ -50,38 +58,27 @@ export const RankItem = ({
       </Text>
 
       {/* Avatar */}
-      <View style={{
-        width: moderateScale(45),
-        height: moderateScale(45),
-        borderRadius: moderateScale(22.5),
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        overflow: 'hidden',
-        marginHorizontal: spacing.sm,
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}>
-        {avatar_url ? (
-          avatar_url.startsWith('http') ? (
-            <Image source={{ uri: avatar_url }} style={{ width: '100%', height: '100%' }} />
-          ) : (
-            <Text style={{ fontSize: moderateScale(24) }}>{avatar_url}</Text>
-          )
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="person" size={moderateScale(24)} color="#444" />
-          </View>
-        )}
+      <View style={{ marginHorizontal: spacing.sm }}>
+        <AvatarWithFrame
+          avatarUrl={avatar_url}
+          frameId={active_frame || FREE_FRAME_ID}
+          size={moderateScale(45)}
+          username={username}
+        />
       </View>
 
-      {/* Username */}
-      <Text style={{
-        color: '#fff',
-        fontSize: moderateScale(14),
-        fontWeight: '700',
-        flex: 1
-      }} numberOfLines={1}>
-        {username}
-      </Text>
+      {/* Username with NameTag */}
+      <UserDisplayName
+        username={username}
+        nametagId={active_nametag}
+        titleId={active_title}
+        size="mini"
+        containerStyle={{
+          flex: 1,
+          alignItems: 'flex-start',
+          minWidth: undefined,
+        }}
+      />
 
       {/* Score */}
       <Text style={{

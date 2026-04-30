@@ -13,9 +13,11 @@ import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
 import { useAuth } from '../hooks/useAuth';
+import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
 import { useResponsive } from '../hooks/useResponsive';
 import { useWordGame } from '../hooks/useWordGame';
+import { inventoryService } from '../services/inventoryService';
 import { statsService } from '../services/statsService';
 import { POWER_UP_DEFINITIONS, PowerUpKey } from '../constants/powerUps';
 import { getWordByCategory } from '../services/wordService';
@@ -31,6 +33,7 @@ export default function SurvivalScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { getStock } = useInventory(user?.id);
   const { moderateScale } = useResponsive();
 
   const [gameId, setGameId] = useState(0);
@@ -119,6 +122,27 @@ export default function SurvivalScreen() {
     setScore(prev => prev + points);
   }, []);
 
+  // Çift kayıt önlemi — farklı çıkış yollarında (onFail + onBack) tekrar kaydetmeyi engeller
+  const hasSavedRef = React.useRef(false);
+
+  // Tüm çıkış senaryolarında (geri tuşu, home, oyun sonu) kaydet
+  const saveGameResult = useCallback((isWin: boolean) => {
+    if (!user || hasSavedRef.current) return;
+    hasSavedRef.current = true;
+    if (solvedCount > 0 && isSessionFairPlay) {
+      inventoryService.giveWinReward(user.id, 'survival').catch(() => {});
+    }
+    saveResultMutation.mutate({
+      mode: 'survival',
+      is_winner: isWin || solvedCount > 0,
+      score,
+      solved_count: solvedCount,
+      duration_seconds: elapsedSeconds,
+      category,
+      is_fair_play: isSessionFairPlay,
+    });
+  }, [user, score, solvedCount, elapsedSeconds, category, isSessionFairPlay, saveResultMutation]);
+
   const onSuccess = useCallback((points: number, fairPlayData: any) => {
     const newSolvedCount = solvedCount + 1;
     setSolvedCount(newSolvedCount);
@@ -198,15 +222,7 @@ export default function SurvivalScreen() {
 
     if (nextLives <= 0) {
       if (user) {
-        saveResultMutation.mutate({
-          mode: 'survival',
-          is_winner: solvedCount > 0,
-          score: score,
-          solved_count: solvedCount,
-          duration_seconds: elapsedSeconds,
-          category,
-          is_fair_play: isSessionFairPlay && (fairPlayData?.isFairPlay ?? true)
-        });
+        saveGameResult(false);
       }
       setTimeout(() => {
         setRevealedInfo(null);
@@ -226,49 +242,30 @@ export default function SurvivalScreen() {
 
   const { configs: powerUpConfigs, resetPowerUps, setStates: setPowerUpStates } = usePowerUps(
     ['shield', 'extra', 'risk', 'hint', 'bomb', 'skip'],
-    {
-      shield: { count: 2 },
-      extra: { count: 2 },
-      risk: { count: 1, isActive: false },
-      hint: { count: 3 },
-      bomb: { count: 2 },
-      skip: { count: 1 }
-    },
+    { shield: { count: getStock('shield') }, extra: { count: getStock('extra') }, risk: { count: getStock('risk'), isActive: false }, hint: { count: getStock('hint') }, bomb: { count: getStock('bomb') }, skip: { count: getStock('skip') } },
     (key) => {
-      if (key === 'risk') {
-        setIsRiskModeActive(!isRiskModeActive);
-        return 'toggle';
-      }
-      if (key === 'shield') {
+      let result: boolean | 'toggle' | void;
+      if (key === 'risk') { setIsRiskModeActive(!isRiskModeActive); result = 'toggle'; }
+      else if (key === 'shield') {
         if (isGameOver || activeBuffs.shield) return false;
         setActiveBuffs(prev => ({ ...prev, shield: true }));
-        setRevealedInfo("Can Kalkanı Aktif!");
-        return true;
-      }
-      if (key === 'extra') {
+        setRevealedInfo("Can Kalkanı Aktif!"); result = true;
+      } else if (key === 'extra') {
         if (isGameOver || activeBuffs.extraAttempt) return false;
         addExtraAttempt();
         setActiveBuffs(prev => ({ ...prev, extraAttempt: true }));
-        setRevealedInfo("+1 Deneme Hakkı!");
-        return true;
-      }
-      if (key === 'hint') {
+        setRevealedInfo("+1 Deneme Hakkı!"); result = true;
+      } else if (key === 'hint') {
         if (isGameOver) return false;
-
         getHint();
-
         if (!word) return false;
-        setRevealedInfo(`İpucu: ${toUpperTurkish(word[0])}`);
-        return true;
-      }
-      if (key === 'bomb') {
+        setRevealedInfo(`İpucu: ${toUpperTurkish(word[0])}`); result = true;
+      } else if (key === 'bomb') {
         if (isGameOver) return false;
-        const success = useBomb();
-        if (success === false) return false;
-        setRevealedInfo("3 Harf Elendi!");
-        return true;
-      }
-      if (key === 'skip') {
+        const s = useBomb();
+        if (s === false) return false;
+        setRevealedInfo("3 Harf Elendi!"); result = true;
+      } else if (key === 'skip') {
         if (isGameOver) return false;
         setRevealedInfo("Kelime Atlandı!");
         setTimeout(() => {
@@ -279,8 +276,12 @@ export default function SurvivalScreen() {
           resetGameStatesRef.current?.(getBaseMaxRows(solvedCount), nextWord.length);
           setGameId(p => p + 1);
         }, 300);
-        return true;
+        result = true;
       }
+      if (result !== false && result !== undefined && user) {
+        inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+      }
+      return result;
     }
   );
 
@@ -331,11 +332,14 @@ export default function SurvivalScreen() {
     onSuccess,
     onFail,
     onScoreUpdate,
+    // Sadece oyun aktifken (settings modal kapalı, oyun bitmemişken) arka plan izle
+    isActive: !isSettingsVisible && !isGameOver,
   });
 
   resetGameStatesRef.current = resetGameStates;
 
   const startNewGame = (selectedCategory: string, language: 'TR' | 'EN') => {
+    hasSavedRef.current = false;  // Yeni oyun için kayıt kilidini sıfırla
     const lengths = [4, 5, 6, 7];
     const randLength = lengths[Math.floor(Math.random() * lengths.length)];
     const newWord = getWordByCategory(selectedCategory, randLength);
@@ -348,12 +352,12 @@ export default function SurvivalScreen() {
     setIsGameOver(false);
     resetGameStatesRef.current?.(4, newWord.length);
     resetPowerUps({
-      shield: { count: 2 },
-      extra: { count: 2 },
-      risk: { count: 1, isActive: false },
-      hint: { count: 3 },
-      bomb: { count: 2 },
-      skip: { count: 1 }
+      shield: { count: getStock('shield') },
+      extra: { count: getStock('extra') },
+      risk: { count: getStock('risk'), isActive: false },
+      hint: { count: getStock('hint') },
+      bomb: { count: getStock('bomb') },
+      skip: { count: getStock('skip') }
     });
     setGameId(p => p + 1);
     setElapsedSeconds(0);
@@ -404,7 +408,13 @@ export default function SurvivalScreen() {
           value: score,
           color: '#ffffff',
         }}
-        onBack={() => router.back()}
+        onBack={() => {
+          // Oyun aktifken geri basılırsa kaydet
+          if (!isGameOver && solvedCount > 0 && user) {
+            saveGameResult(false);
+          }
+          router.back();
+        }}
         onSettings={() => {
           setIsSettingsVisible(true);
         }}
@@ -515,6 +525,7 @@ export default function SurvivalScreen() {
         word={word}
         guesses={score}
         mode="survival"
+        category={category}
         extraData={solvedCount}
         isFairPlay={isSessionFairPlay}
         backgroundStats={sessionBackgroundStats}
@@ -522,7 +533,10 @@ export default function SurvivalScreen() {
           setIsGameOver(false);
           setIsSettingsVisible(true);
         }}
-        onHome={() => router.replace('/(tabs)')}
+        onHome={() => {
+          // ResultModal'dan home'a gidilirken de kaydet (zaten onFail kaydetti ama çift kayıt önlemi)
+          router.replace('/(tabs)');
+        }}
       />
     </GameLayout>
   );

@@ -3,7 +3,6 @@
     "name": "lexicon",
     "slug": "Game",
     "version": "1.0.0",
-
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lexicon",
@@ -43,7 +42,8 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

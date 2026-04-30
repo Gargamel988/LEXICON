@@ -4,6 +4,15 @@ import Toast from "react-native-toast-message";
 import { CellStatus, Row } from "../types";
 import { toUpperTurkish } from "../utils/stringUtils";
 import { isValidWord } from "../utils/wordUtils";
+import { useFairPlay } from "./useFairPlay";
+
+interface GuessScoreEvent {
+  letterPoints: number;   // correct × 10 + present × 5
+  wordSolved: boolean;    // kelimeyi tamamen çözdü mü
+  wordBonus: number;      // kelime çözme bonusu (satır'a göre)
+  comboCount: number;     // bu tahminle aynı anda kaç kelime çözüldü
+  comboBonus: number;     // combo bonusu
+}
 
 interface UseMultiWordGameProps {
   words: string[];
@@ -12,6 +21,10 @@ interface UseMultiWordGameProps {
   onSuccess?: (stats: any) => void;
   onFail?: (stats: any) => void;
   onCombo?: (multiplier: number) => void;
+  onGuessScored?: (event: GuessScoreEvent) => void;
+  /** Sadece true olduğunda arka plan tespiti çalışır */
+  isActive?: boolean;
+  onFairPlayViolation?: (reason: string) => void;
 }
 
 export const useMultiWordGame = ({
@@ -21,6 +34,9 @@ export const useMultiWordGame = ({
   onSuccess,
   onFail,
   onCombo,
+  onGuessScored,
+  isActive = true,
+  onFairPlayViolation,
 }: UseMultiWordGameProps) => {
   const [currentRow, setCurrentRow] = useState(0);
   const [currentGuess, setCurrentGuess] = useState("");
@@ -55,6 +71,14 @@ export const useMultiWordGame = ({
   const [revealedHints, setRevealedHints] = useState<number[][]>(
     words.map(() => []),
   );
+  const [totalComboPoints, setTotalComboPoints] = useState(0);
+
+  // Fair Play — useFairPlay ile yönetilir
+  const { isFairPlay, backgroundCount, backgroundTotalTime, resetFairPlay, getFairPlayData } = useFairPlay({
+    isActive,
+    isGameOver,
+    onViolation: onFairPlayViolation,
+  });
 
   // Keyboard statuses for each word
   const letterStatusesArray = useMemo(() => {
@@ -119,12 +143,14 @@ export const useMultiWordGame = ({
       setRevealedHints(newWords.map(() => []));
       setExcludedChars([]);
       setAnalysisStatusesArray(newWords.map(() => ({})));
+      setTotalComboPoints(0);
       setCurrentRow(0);
       setCurrentGuess("");
       setIsWaiting(false);
       setIsGameOver(false);
+      resetFairPlay(); // useFairPlay sıfırlama
     },
-    [],
+    [resetFairPlay],
   );
 
   const handleKeyPress = useCallback(
@@ -188,22 +214,59 @@ export const useMultiWordGame = ({
             if (currentGuess === word) {
               newSolvedStates[wordIndex] = true;
               newSolvedAtRow[wordIndex] = currentRow + 1;
-              // Success feedback
             }
           });
 
-          // Combo Detection
-          const freshlySolvedCount = newSolvedStates.filter(
-            (s, i) => !solvedStates[i] && s,
-          ).length;
+          // --- SCORING CALCULATION ---
+          // 1. Letter points: correct=10, present=5 per word per letter
+          let totalLetterPoints = 0;
+          words.forEach((word, wordIndex) => {
+            if (newSolvedStates[wordIndex] && !solvedStates[wordIndex]) return; // freshly solved: counted in wordBonus
+            if (solvedStates[wordIndex]) return; // already solved: skip
+            const targetChars = word.split('');
+            const guessChars = currentGuess.split('');
+            const statuses: CellStatus[] = Array(wordLength).fill('absent');
+            const remaining: Record<string, number> = {};
+            targetChars.forEach(c => { remaining[c] = (remaining[c] || 0) + 1; });
+            guessChars.forEach((c, i) => { if (c === targetChars[i]) { statuses[i] = 'correct'; remaining[c]--; } });
+            guessChars.forEach((c, i) => { if (statuses[i] !== 'correct' && remaining[c] > 0 && targetChars.includes(c)) { statuses[i] = 'present'; remaining[c]--; } });
+            statuses.forEach(s => {
+              if (s === 'correct') totalLetterPoints += 10;
+              else if (s === 'present') totalLetterPoints += 5;
+            });
+          });
+
+          // 2. Word solve bonus: 100 base + (8 - row) * 20 per freshly solved word
+          const freshlySolvedIndices = words
+            .map((_, i) => i)
+            .filter(i => !solvedStates[i] && newSolvedStates[i]);
+          let wordBonus = 0;
+          freshlySolvedIndices.forEach(() => {
+            wordBonus += 100 + (Math.max(0, 8 - currentRow) * 20);
+          });
+
+          // 3. Combo: aynı denemede 2+ kelime çözüldüyse
+          const freshlySolvedCount = freshlySolvedIndices.length;
+          let comboBonus = 0;
           if (freshlySolvedCount > 1) {
+            comboBonus = (freshlySolvedCount - 1) * 150;
             onCombo?.(freshlySolvedCount);
+            setTotalComboPoints(prev => prev + (freshlySolvedCount - 1));
+          }
+
+          // Fire scoring event
+          if (onGuessScored && (totalLetterPoints > 0 || wordBonus > 0 || comboBonus > 0)) {
+            onGuessScored({
+              letterPoints: totalLetterPoints,
+              wordSolved: freshlySolvedCount > 0,
+              wordBonus,
+              comboCount: freshlySolvedCount,
+              comboBonus,
+            });
           }
 
           // Domino Effect Logic
-          const freshlySolvedIndices = words
-            .map((_, i) => i)
-            .filter((i) => !solvedStates[i] && newSolvedStates[i]);
+          // (freshlySolvedIndices already calculated above for scoring)
 
           if (freshlySolvedIndices.length > 0) {
             const newRevealedHints = [...revealedHints];
@@ -263,6 +326,9 @@ export const useMultiWordGame = ({
             onSuccess?.({
               solvedAtRow: newSolvedAtRow,
               totalAttempts: currentRow + 1,
+              comboCount: totalComboPoints + (freshlySolvedCount > 1 ? freshlySolvedCount - 1 : 0),
+              totalComboBonus: (totalComboPoints + (freshlySolvedCount > 1 ? freshlySolvedCount - 1 : 0)) * 150,
+              fairPlay: getFairPlayData(),
             });
           } else if (currentRow === maxRows - 1) {
             setIsWaiting(true);
@@ -271,6 +337,7 @@ export const useMultiWordGame = ({
               solvedAtRow: newSolvedAtRow,
               totalAttempts: maxRows,
               words,
+              fairPlay: getFairPlayData(),
             });
           } else {
             setCurrentRow((prev) => prev + 1);
@@ -329,6 +396,7 @@ export const useMultiWordGame = ({
       onSuccess,
       onFail,
       onCombo,
+      onGuessScored,
     ],
   );
 
@@ -554,5 +622,9 @@ export const useMultiWordGame = ({
     addLightning,
     useMultiBomb,
     useMultiAnalysis,
+    // Fair Play
+    isFairPlay,
+    backgroundCount,
+    backgroundTotalTime,
   };
 };

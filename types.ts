@@ -43,6 +43,7 @@ export interface Room {
   bomb_syllable?: string;
   used_words?: string[];
   bomb_duration_ms?: number;
+  last_holder_id?: string;
 }
 
 export interface RoomPlayer {
@@ -53,6 +54,12 @@ export interface RoomPlayer {
   is_host: boolean;
   is_ready: boolean;
   joined_at: string;
+  avatar_url?: string;
+  active_frame?: string;
+  active_nametag?: string;
+  active_title?: string;
+  lives?: number;
+  is_eliminated?: boolean;
 }
 
 export interface BattleMove {
