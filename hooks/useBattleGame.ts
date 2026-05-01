@@ -149,7 +149,6 @@ export const useBattleGame = ({
     if (isGameOver || !roomId || roomId === "") return;
 
     if (playerCount > 0 && failedPlayers.size >= playerCount) {
-      console.log("[BattleDebug] Beraberlik tespit edildi, sonlandırılıyor...");
       setIsGameOver(true);
       multiplayerService.setDraw(roomId);
       onWinRef.current("draw");

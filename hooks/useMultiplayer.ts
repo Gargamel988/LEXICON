@@ -128,16 +128,13 @@ export const useRoomState = (
   const { data: players = [], isLoading: isLoadingPlayers, refetch: refetchPlayers } = useQuery({
     queryKey: ["room_players", room?.id],
     queryFn: () => {
-        console.log(`[useRoomState] Fetching players for room ID: ${room?.id}`);
         return multiplayerService.getRoomPlayers(room!.id);
     },
     enabled: !!room?.id,
   });
 
   useEffect(() => {
-    if (players.length > 0) {
-        console.log(`[useRoomState] Sync: ${players.length} players loaded for room ${cleanRoomCode}`);
-    }
+    // Players loaded sync logic
   }, [players.length, cleanRoomCode]);
 
   useEffect(() => {
@@ -150,7 +147,6 @@ export const useRoomState = (
         
         const currentPath = pathname.replace(/\/$/, "");
         if (!currentPath.includes(targetPath)) {
-          console.log(`[useRoomState] Game started! Navigating to: ${targetUrl}`);
           router.replace(targetUrl as any);
         }
       }

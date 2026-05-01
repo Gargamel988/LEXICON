@@ -32,6 +32,8 @@ const GAME_MODES: GameMode[] = [
   { id: 'lobi', title: 'Çok Oyunculu', description: 'Arkadaşlarınla oda kur; 1vs1 Battle veya Bomba Kimde oyna!', icon: 'people-outline', link: '/lobby', },
 ];
 
+import { BannerAd } from '../../components/Ads/BannerAd';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -131,8 +133,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-
-
       </ScrollView>
 
       <AuthWarningModal
@@ -144,6 +144,9 @@ export default function HomeScreen() {
           }
         }}
       />
+
+      {/* BANNER REKLAM */}
+      <BannerAd />
     </SafeAreaView>
   );
 }

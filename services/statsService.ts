@@ -583,12 +583,8 @@ export const statsService = {
     const level = profile?.level || 1;
     const currentXp = profile?.xp || 0;
 
-    // Rütbe belirleme (Seviyeye göre)
-    let rank = "Acemi";
-    if (level >= 50) rank = "Efsane";
-    else if (level >= 30) rank = "Üstat";
-    else if (level >= 15) rank = "Kelime Avcısı";
-    else if (level >= 5) rank = "Çırak";
+    // Rütbe belirleme kaldırıldı
+    let rank = "";
 
     return {
       totalPoints, // Bu hala oyun skorlarının toplamı (istatistik için)

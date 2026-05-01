@@ -69,7 +69,6 @@ export const multiplayerService = {
       return null;
     }
     const cleanCode = code.toUpperCase();
-    console.log(`[MultiplayerService] Fetching room with code: ${cleanCode}`);
     const { data, error } = await supabase
       .from("multiplayer_rooms")
       .select("*")
@@ -77,10 +76,8 @@ export const multiplayerService = {
       .single();
 
     if (error) {
-      console.error(`[MultiplayerService] Error fetching room by code ${code}:`, error);
       throw error;
     }
-    console.log(`[MultiplayerService] Room found:`, data?.id);
     return data as Room;
   },
 
@@ -93,7 +90,6 @@ export const multiplayerService = {
     username: string,
     isHost: boolean = false,
   ) {
-    console.log(`[MultiplayerService] User ${username} (${userId}) joining room ${roomId} (isHost: ${isHost})`);
     const { data, error } = await supabase
       .from("room_players")
       .upsert(
@@ -112,10 +108,8 @@ export const multiplayerService = {
       .single();
 
     if (error) {
-      console.error(`[MultiplayerService] Error joining room:`, error);
       throw error;
     }
-    console.log(`[MultiplayerService] Successfully joined room:`, data?.id);
     return data as RoomPlayer;
   },
 
@@ -123,7 +117,6 @@ export const multiplayerService = {
    * Odadaki oyuncuları getirir (Profil bilgileriyle birlikte)
    */
   async getRoomPlayers(roomId: string) {
-    console.log(`[MultiplayerService] Fetching players for room: ${roomId}`);
     const { data: players, error: playersError } = await supabase
       .from("room_players")
       .select("*")

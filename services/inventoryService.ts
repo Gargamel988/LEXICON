@@ -103,10 +103,8 @@ export const inventoryService = {
 
       if (error) throw error;
 
-      console.log(`[COINS] +${amount} (${reason}) → Bakiye: ${newBalance}`);
       return { success: true, newBalance };
     } catch (error) {
-      console.error('Add coins error:', error);
       return { success: false };
     }
   },
@@ -159,10 +157,8 @@ export const inventoryService = {
 
       if (invError) throw invError;
 
-      console.log(`[SHOP] ${powerUpKey} x${quantity} satın alındı. Kalan coin: ${newBalance}`);
       return { success: true, newBalance };
     } catch (error) {
-      console.error('Purchase error:', error);
       return { success: false, reason: 'server_error' };
     }
   },
@@ -219,5 +215,15 @@ export const inventoryService = {
    */
   async giveAdReward(userId: string): Promise<{ success: boolean; newBalance?: number }> {
     return this.addCoins(userId, AD_REWARD_COINS, 'ad_watch');
+  },
+
+  /**
+   * Oyun ödülünü katlayarak verir (reklam izleyince)
+   */
+  async giveDoubleReward(userId: string, mode: string): Promise<void> {
+    const reward = WIN_REWARD_COINS[mode] ?? 5;
+    // Zaten tek katı oyun biterken verildiği varsayılır (giveWinReward)
+    // Bu yüzden sadece 1 kat daha ekliyoruz
+    await this.addCoins(userId, reward, `double_win_${mode}`);
   },
 };

@@ -1,5 +1,7 @@
 import { supabase } from "../lib/supabase";
 import Toast from "react-native-toast-message";
+import { PowerUpKey } from "../constants/powerUps";
+import { TITLE_REWARDS, getLevelInfo } from "../constants/levels";
 
 export interface LevelUpResult {
   leveledUp: boolean;
@@ -7,7 +9,8 @@ export interface LevelUpResult {
   newLevel: number;
   rewards: {
     coins: number;
-    powerups?: { type: string; quantity: number }[];
+    powerups?: { type: PowerUpKey; quantity: number }[];
+    titleId?: string;
   };
 }
 
@@ -27,24 +30,14 @@ export const levelService = {
       if (profileError || !profile) throw profileError;
 
       const oldXp = profile.xp || 0;
-      const oldLevel = profile.level || 1;
       const newTotalXp = oldXp + xpAmount;
 
       // 2. Yeni seviyeyi hesapla
-      // Formül: Her seviye bir öncekinden 500 XP daha fazla istiyor
-      // Seviye 1: 0 - 2000
-      // Seviye 2: 2000 - 4500 (2000 + 2500)
-      // Seviye 3: 4500 - 7500 (4500 + 3000)
-      let currentLevel = 1;
-      let xpThreshold = 3000; // Başlangıç eşiği (Lvl 1 -> 2 için)
-      let cumulativeXp = 0;
-
-      while (newTotalXp >= cumulativeXp + xpThreshold) {
-        cumulativeXp += xpThreshold;
-        currentLevel++;
-        xpThreshold += 1000; // Her seviyede zorluk 1000 XP artar
-      }
-
+      const oldLevelInfo = getLevelInfo(oldXp);
+      const oldLevel = oldLevelInfo.level;
+      
+      const newLevelInfo = getLevelInfo(newTotalXp);
+      const currentLevel = newLevelInfo.level;
       const leveledUp = currentLevel > oldLevel;
       const result: LevelUpResult = {
         leveledUp,
@@ -62,8 +55,8 @@ export const levelService = {
       };
 
       if (leveledUp) {
-        // Seviye atlama ödüllerini hesapla
-        const coinsReward = currentLevel * 100;
+        // Seviye atlama ödüllerini hesapla - Elmas azaltıldı (level * 10)
+        const coinsReward = currentLevel * 10;
         result.rewards.coins = coinsReward;
         updates.coins = (profile.coins || 0) + coinsReward;
 
@@ -71,8 +64,8 @@ export const levelService = {
         if (currentLevel % 5 === 0) {
           result.rewards.powerups = [
             { type: 'hint', quantity: 2 },
-            { type: 'undo', quantity: 2 },
-            { type: 'clear', quantity: 2 }
+            { type: 'veto', quantity: 2 },
+            { type: 'bomb', quantity: 2 }
           ];
           
           // Power-up'ları envantere ekle
@@ -94,11 +87,28 @@ export const levelService = {
           }
         }
 
+        // Unvan ödülü kontrolü
+        if (TITLE_REWARDS[currentLevel]) {
+          const titleId = TITLE_REWARDS[currentLevel];
+          result.rewards.titleId = titleId;
+          
+          // Unvanı kullanıcıya ekle
+          await supabase
+            .from('user_titles')
+            .upsert({
+              user_id: userId,
+              title_id: titleId
+            }, { onConflict: 'user_id,title_id' });
+        }
+
         // Seviye atlama bildirimi
+        let toastText2 = `${coinsReward} Elmas kazandın!`;
+        if (result.rewards.titleId) toastText2 += ` 🎖️ Yeni unvan açıldı!`;
+
         Toast.show({
           type: 'success',
           text1: `🎉 SEVİYE ATLADIN! (LVL ${currentLevel})`,
-          text2: `${coinsReward} Altın kazandın!`,
+          text2: toastText2,
           position: 'bottom',
           visibilityTime: 5000,
         });

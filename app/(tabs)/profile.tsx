@@ -21,6 +21,7 @@ import { renderPowerUpIcon } from '@/utils/renderPowerUpIcon';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
+import { BannerAd } from '@/components/Ads/BannerAd';
 
 export default function ProfileScreen() {
   const { user, signOutMutation, loading: authLoading } = useAuth();
@@ -115,7 +116,6 @@ export default function ProfileScreen() {
           user={user}
           profile={profile}
           level={stats.level}
-          rank={stats.rank}
           onEdit={() => setIsEditModalVisible(true)}
           activeFrame={activeFrame?.id}
           activeNameTag={activeNameTag}
@@ -225,7 +225,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Settings & Account Management */}
         <ProfileSettingsList onLogout={() => signOutMutation.mutate()} />
       </ScrollView>
 
@@ -246,6 +245,7 @@ export default function ProfileScreen() {
         onSaveFrame={(frameId) => setActiveFrame(frameId)}
         onSaveNameTag={(tagId) => setActiveNameTag(tagId)}
       />
+      <BannerAd />
     </View>
   );
 }

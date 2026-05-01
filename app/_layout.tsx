@@ -6,7 +6,7 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, AppState, View } from "react-native";
 import Colors from '../constants/Colors';
 
 const queryClient = new QueryClient();
@@ -78,10 +78,28 @@ function RootContent() {
 import Toast from 'react-native-toast-message';
 import { lexiconToastConfig } from '../components/Common/LexiconToast';
 
+import { adService } from "../services/adService";
+
 export default function RootLayout() {
   useEffect(() => {
     // Kök arka plan rengini ayarla
     SystemUI.setBackgroundColorAsync(Colors.background);
+    
+    // Reklam servisini başlat
+    adService.init().catch(err => {
+      // console.error("AdService init error:", err)
+    });
+
+    // Uygulama Açıkken Reklamı (App Open Ad) Dinleyicisi
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        adService.showAppOpenAd();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (

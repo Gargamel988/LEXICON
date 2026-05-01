@@ -491,6 +491,10 @@ export default function ClimbGameScreen() {
                 extraData={currentRound}
                 isFairPlay={isSessionFairPlay}
                 backgroundStats={sessionBackgroundStats}
+                onRecoverLife={() => {
+                  setIsGameOver(false);
+                  startTimer(15); // Ek süre vererek devam et
+                }}
                 onRestart={resetTimedGame}
                 onHome={() => router.replace('/')}
                 mode="climb"

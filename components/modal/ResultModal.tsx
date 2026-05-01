@@ -10,6 +10,12 @@ import Animated, {
 import Colors from '../../constants/Colors';
 import { useResponsive } from '../../hooks/useResponsive';
 import { CellData, Row } from '../../types';
+import { adService } from '../../services/adService';
+import { AD_UNIT_IDS } from '../../constants/ads';
+import { useAuth } from '../../hooks/useAuth';
+import { inventoryService } from '../../services/inventoryService';
+import Toast from 'react-native-toast-message';
+import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
 
 interface ResultModalProps {
   isVisible: boolean;
@@ -26,6 +32,7 @@ interface ResultModalProps {
   category?: string;
   isFairPlay?: boolean;
   backgroundStats?: { count: number; totalTime: number };
+  onRecoverLife?: () => void;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -44,8 +51,14 @@ const ResultModal: React.FC<ResultModalProps> = ({
   grid,
   category,
   isFairPlay = true,
-  backgroundStats
+  backgroundStats,
+  onRecoverLife
 }) => {
+  const { user } = useAuth();
+  const [isRewardDoubled, setIsRewardDoubled] = React.useState(false);
+  const [isDoubleLoading, setIsDoubleLoading] = React.useState(false);
+  const [isRecoverLoading, setIsRecoverLoading] = React.useState(false);
+  const [isLifeRecovered, setIsLifeRecovered] = React.useState(false);
   const { scale, verticalScale, moderateScale } = useResponsive();
 
   const isWin = status === 'win';
@@ -69,6 +82,8 @@ const ResultModal: React.FC<ResultModalProps> = ({
   useEffect(() => {
     if (isVisible) {
       setShouldRender(true);
+      setIsRewardDoubled(false);
+      setIsLifeRecovered(false);
       opacity.value = withTiming(1, { duration: 300 });
       translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
     } else {
@@ -179,6 +194,68 @@ const ResultModal: React.FC<ResultModalProps> = ({
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const handleHome = async () => {
+    // Interstitial reklamı kontrol et
+    const showedAd = await adService.checkAndShowInterstitial();
+    // Reklam gösterilse de gösterilmese de ana sayfaya git
+    onHome();
+  };
+
+  const handleDoubleReward = () => {
+    if (!user || isRewardDoubled || isDoubleLoading) return;
+
+    setIsDoubleLoading(true);
+    adService.showRewardedAd(
+      AD_UNIT_IDS.REWARDED_DOUBLE,
+      async () => {
+        // Başarılı izleme ödülü
+        await inventoryService.giveDoubleReward(user.id, mode);
+        setIsRewardDoubled(true);
+        setIsDoubleLoading(false);
+        Toast.show({
+          type: 'success',
+          text1: 'Ödül Katlandı! 💎',
+          text2: 'Tebrikler, elmas ödülün ikiye katlandı.',
+        });
+      },
+      () => {
+        setIsDoubleLoading(false);
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: 'Reklam yüklenirken bir sorun oluştu.',
+        });
+      }
+    );
+  };
+
+  const handleRecoverLife = () => {
+    if (!onRecoverLife || isLifeRecovered || isRecoverLoading) return;
+
+    setIsRecoverLoading(true);
+    adService.showRewardedAd(
+      AD_UNIT_IDS.REWARDED_LIFE,
+      async () => {
+        setIsLifeRecovered(true);
+        setIsRecoverLoading(false);
+        onRecoverLife();
+        Toast.show({
+          type: 'success',
+          text1: 'Can Kurtarıldı! ❤️',
+          text2: 'Oyuna kaldığın yerden devam ediyorsun.',
+        });
+      },
+      () => {
+        setIsRecoverLoading(false);
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: 'Reklam yüklenirken bir sorun oluştu.',
+        });
+      }
+    );
   };
 
   const backdropStyle = useAnimatedStyle(() => ({
@@ -380,6 +457,76 @@ const ResultModal: React.FC<ResultModalProps> = ({
             <Text style={{ color: '#fff', fontSize: moderateScale(16), fontWeight: '900' }}>SKORU PAYLAŞ</Text>
           </Pressable>
 
+          {/* ÖDÜLÜ KATLA BUTONU (Sadece Kazanınca) */}
+          {isWin && user && !isRewardDoubled && (
+            <Pressable
+              onPress={handleDoubleReward}
+              disabled={isDoubleLoading}
+              style={({ pressed }) => ({
+                backgroundColor: 'rgba(255, 215, 0, 0.15)',
+                height: verticalScale(52),
+                borderRadius: moderateScale(16),
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: scale(10),
+                borderWidth: 2,
+                borderColor: 'gold',
+                opacity: (pressed || isDoubleLoading) ? 0.8 : 1,
+                marginTop: verticalScale(5)
+              })}
+            >
+              <Ionicons name={isDoubleLoading ? "sync" : "play-circle"} size={scale(22)} color="gold" />
+              <Text style={{ color: 'gold', fontSize: moderateScale(15), fontWeight: '900' }}>
+                {isDoubleLoading ? "YÜKLENİYOR..." : "ÖDÜLÜ 2X YAP (REKLAM)"}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                 <Ionicons name={COIN_ICON} size={14} color="gold" />
+                 <Text style={{ color: 'gold', fontWeight: '900' }}>x2</Text>
+              </View>
+            </Pressable>
+          )}
+
+          {isRewardDoubled && (
+             <View style={{ 
+               height: verticalScale(40), 
+               alignItems: 'center', 
+               justifyContent: 'center',
+               backgroundColor: 'rgba(76, 175, 80, 0.1)',
+               borderRadius: moderateScale(10),
+               borderWidth: 1,
+               borderColor: 'rgba(76, 175, 80, 0.3)'
+             }}>
+                <Text style={{ color: '#4caf50', fontWeight: '800', fontSize: moderateScale(12) }}>✓ ÖDÜL KATLANDI</Text>
+             </View>
+          )}
+
+          {/* CAN KURTARMA BUTONU (Sadece Kaybedince ve survival/climb gibi modlarda) */}
+          {!isWin && onRecoverLife && !isLifeRecovered && (
+             <Pressable
+              onPress={handleRecoverLife}
+              disabled={isRecoverLoading}
+              style={({ pressed }) => ({
+                backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                height: verticalScale(52),
+                borderRadius: moderateScale(16),
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: scale(10),
+                borderWidth: 2,
+                borderColor: Colors.danger,
+                opacity: (pressed || isRecoverLoading) ? 0.8 : 1,
+                marginTop: verticalScale(5)
+              })}
+            >
+              <Ionicons name={isRecoverLoading ? "sync" : "heart"} size={scale(22)} color={Colors.danger} />
+              <Text style={{ color: Colors.danger, fontSize: moderateScale(15), fontWeight: '900' }}>
+                {isRecoverLoading ? "YÜKLENİYOR..." : "CAN KURTAR (+1 ❤️)"}
+              </Text>
+            </Pressable>
+          )}
+
           {onNewGame && (
             <Pressable
               onPress={onNewGame}
@@ -417,7 +564,7 @@ const ResultModal: React.FC<ResultModalProps> = ({
             </Pressable>
 
             <Pressable
-              onPress={onHome}
+              onPress={handleHome}
               style={({ pressed }) => ({
                 flex: 1,
                 backgroundColor: 'transparent',

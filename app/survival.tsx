@@ -529,6 +529,11 @@ export default function SurvivalScreen() {
         extraData={solvedCount}
         isFairPlay={isSessionFairPlay}
         backgroundStats={sessionBackgroundStats}
+        onRecoverLife={() => {
+          setLives(1);
+          setIsGameOver(false);
+          hasSavedRef.current = false; // Kayıt hakkını tekrar aç
+        }}
         onRestart={() => {
           setIsGameOver(false);
           setIsSettingsVisible(true);
