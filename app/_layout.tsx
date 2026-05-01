@@ -54,6 +54,14 @@ function RootContent() {
     }
   }, [url]);
 
+  useEffect(() => {
+    if (user?.id) {
+      statsService.getProfile(user.id).then(profile => {
+        if (profile) adService.isAdFree = !!profile.no_ads;
+      }).catch(() => { });
+    }
+  }, [user?.id]);
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
@@ -79,12 +87,13 @@ import Toast from 'react-native-toast-message';
 import { lexiconToastConfig } from '../components/Common/LexiconToast';
 
 import { adService } from "../services/adService";
+import { statsService } from '../services/statsService';
 
 export default function RootLayout() {
   useEffect(() => {
     // Kök arka plan rengini ayarla
     SystemUI.setBackgroundColorAsync(Colors.background);
-    
+
     // Reklam servisini başlat
     adService.init().catch(err => {
       // console.error("AdService init error:", err)

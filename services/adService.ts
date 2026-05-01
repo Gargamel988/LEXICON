@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import mobileAds, {
   AdEventType,
   AppOpenAd,
+  BannerAd,
+  BannerAdSize,
   InterstitialAd,
   RewardedAd,
   RewardedAdEventType,
@@ -13,6 +15,7 @@ class AdService {
   private appOpenAd: AppOpenAd | null = null;
   private gameCounter = 0;
   private STORAGE_KEY = "@game_ad_counter";
+  public isAdFree = false;
 
   async init() {
     await mobileAds().initialize();
@@ -20,6 +23,7 @@ class AdService {
     this.prepareInterstitial();
     this.prepareAppOpenAd();
   }
+
 
   // ... (previous methods)
 
@@ -36,6 +40,7 @@ class AdService {
   }
 
   async showAppOpenAd() {
+    if (this.isAdFree) return;
     if (this.appOpenAd?.loaded) {
       this.appOpenAd.show();
     } else {
@@ -78,6 +83,7 @@ class AdService {
   }
 
   async checkAndShowInterstitial(): Promise<boolean> {
+    if (this.isAdFree) return false;
     this.gameCounter++;
     await this.saveCounter();
 

@@ -149,7 +149,12 @@ export const statsService = {
       .maybeSingle();
 
     if (error) throw error;
-    return data as { id: string; username: string; avatar_url: string };
+    return data as {
+      id: string;
+      username: string;
+      avatar_url: string;
+      no_ads: boolean;
+    };
   },
 
   /**
@@ -157,8 +162,8 @@ export const statsService = {
    */
   async saveGameResult(userId: string, result: GameResult) {
     try {
-      // Hile şüphesi varsa veritabanına kaydetme
-      if (result.is_fair_play === false) {
+      // Hile şüphesi kontrolü
+      if (result.is_fair_play === false && result.mode !== 'daily') {
         return { success: false, reason: "fair_play_violation" };
       }
 
@@ -177,10 +182,15 @@ export const statsService = {
           solved_count: result.solved_count || 0,
           word_count: result.word_count || 0,
           difficulty: result.difficulty,
-          // NOT: is_fair_play sütunu veritabanında mevcut olmadığı için buraya eklenmiyor.
+          is_fair_play: result.is_fair_play !== false, // Hile durumunu kaydet
         });
 
       if (resultError) throw resultError;
+
+      // Hileli oyun kaydedildi (Günlük mod için), ama ödül/seri verilmesin
+      if (result.is_fair_play === false) {
+        return { success: false, reason: "fair_play_violation" };
+      }
 
       if (result.mode === "daily") {
         await this.updateStreak(userId);

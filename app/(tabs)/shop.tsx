@@ -44,6 +44,15 @@ const BUNDLE_PACKAGES = [
     icon: 'rocket-launch-outline',
   },
   {
+    id: 'bundle_monthly_adfree',
+    label: 'Aylık Premium',
+    price: '₺29,99',
+    color: '#fbbf24',
+    badge: 'YENİ',
+    desc: 'Reklamsız + 500 Elmas',
+    icon: 'shield-check-outline',
+  },
+  {
     id: 'bundle_mega',
     label: 'Mega Paket',
     price: '₺349,99',

@@ -12,7 +12,6 @@ import GameLayout from '../components/Layout/GameLayout';
 import DailyResultModal from '../components/modal/DailyResultModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDailyGame } from '../hooks/useDailyGame';
-import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
 import { useWordGame } from '../hooks/useWordGame';
 import { inventoryService } from '../services/inventoryService';
@@ -24,7 +23,6 @@ const DAILY_BG = Colors.modes.daily.background;
 export default function DailyGameScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { getStock } = useInventory(user?.id);
   const { dailyWord, isLoading, hasPlayed, playData, timeLeft, submitResult, streak } = useDailyGame();
 
   const [startTime] = useState(Date.now());
@@ -137,15 +135,21 @@ export default function DailyGameScreen() {
     if (dailyWord) resetGameStates(6, dailyWord.length);
   }, [dailyWord]);
 
+  // Günlük modda güçlendirmeler envanterden GELMEZ, herkese sabit ve ücretsiz verilir.
+  const [dailyPowerUps, setDailyPowerUps] = useState({ hint: 2, bomb: 1 });
+
   const { configs: powerUpConfigs } = usePowerUps(['hint', 'bomb'], {
-    hint: { count: getStock('hint') },
-    bomb: { count: getStock('bomb') }
+    hint: { count: dailyPowerUps.hint },
+    bomb: { count: dailyPowerUps.bomb }
   }, (key) => {
+    if (dailyPowerUps[key as keyof typeof dailyPowerUps] <= 0) return false;
+
     let result: boolean | undefined = undefined;
     if (key === 'hint') { const s = getHint(); result = s !== false; }
     else if (key === 'bomb') { const s = useBomb(); result = s !== false; }
-    if (result !== false && result !== undefined && user) {
-      inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+
+    if (result) {
+      setDailyPowerUps(prev => ({ ...prev, [key]: prev[key as keyof typeof dailyPowerUps] - 1 }));
     }
     return result ?? false;
   });
