@@ -2,9 +2,9 @@ import React from 'react';
 import { Platform, View } from 'react-native';
 import { BannerAd as AdMobBanner, BannerAdSize } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../../constants/ads';
-import { adService } from '../../services/adService';
 import { useAuth } from '../../hooks/useAuth';
 import { useProfile } from '../../hooks/useProfile';
+import { adService } from '../../services/adService';
 
 interface BannerAdProps {
   size?: BannerAdSize;

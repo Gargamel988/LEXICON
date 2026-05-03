@@ -2,8 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import mobileAds, {
   AdEventType,
   AppOpenAd,
-  BannerAd,
-  BannerAdSize,
   InterstitialAd,
   RewardedAd,
   RewardedAdEventType,
@@ -23,7 +21,6 @@ class AdService {
     this.prepareInterstitial();
     this.prepareAppOpenAd();
   }
-
 
   // ... (previous methods)
 

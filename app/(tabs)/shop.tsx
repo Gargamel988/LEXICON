@@ -9,26 +9,26 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { BannerAd } from '../../components/Ads/BannerAd';
 import { FramesSection } from '../../components/Cosmetics/FramesSection';
 import { NameTagsSection } from '../../components/Cosmetics/NameTagsSection';
-import Colors from '../../constants/Colors';
-import { BannerAd } from '../../components/Ads/BannerAd';
-import { adService } from '../../services/adService';
 import { AD_UNIT_IDS } from '../../constants/ads';
+import Colors from '../../constants/Colors';
 import { POWER_UP_DEFINITIONS, PowerUpKey } from '../../constants/powerUps';
 import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useInventory } from '../../hooks/useInventory';
 import { useProfile } from '../../hooks/useProfile';
 import { useResponsive } from '../../hooks/useResponsive';
+import { adService } from '../../services/adService';
 import { POWER_UP_PRICES } from '../../services/inventoryService';
 
 // Shop Components
-import { UltimateBundle } from '../../components/Shop/UltimateBundle';
 import { BundleSection } from '../../components/Shop/BundleSection';
+import { FreeGemButton } from '../../components/Shop/FreeGemButton';
 import { GemMarket } from '../../components/Shop/GemMarket';
 import { PowerUpSection } from '../../components/Shop/PowerUpSection';
-import { FreeGemButton } from '../../components/Shop/FreeGemButton';
+import { UltimateBundle } from '../../components/Shop/UltimateBundle';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -49,7 +49,7 @@ const BUNDLE_PACKAGES = [
     price: '₺29,99',
     color: '#fbbf24',
     badge: 'YENİ',
-    desc: 'Reklamsız + 500 Elmas',
+    desc: 'Reklamsız + 200 Elmas',
     icon: 'shield-check-outline',
   },
   {
@@ -153,21 +153,21 @@ export default function ShopScreen() {
         <UltimateBundle onBuy={handleBuyIAP} />
 
         <FreeGemButton onWatchAd={handleWatchAd} isLoading={isAdRewarding} />
-        
+
         <BundleSection bundles={BUNDLE_PACKAGES} onBuy={handleBuyIAP} />
 
         <GemMarket packages={COIN_PACKAGES} onBuy={handleBuyIAP} />
 
-        <PowerUpSection 
-          powerUpKeys={SHOP_POWER_UPS} 
-          onBuy={handleBuyPowerUp} 
-          buyingKey={buyingKey} 
+        <PowerUpSection
+          powerUpKeys={SHOP_POWER_UPS}
+          onBuy={handleBuyPowerUp}
+          buyingKey={buyingKey}
         />
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 24, paddingHorizontal: wp(5) }}>
           <Text style={{ color: Colors.text, fontSize: moderateScale(16), fontWeight: '900', letterSpacing: 0.5, textTransform: 'uppercase' }}>Kozmetik Mağazası</Text>
         </View>
-        
+
         <View style={{ paddingHorizontal: wp(5) }}>
           <FramesSection
             userId={user?.id ?? ''}

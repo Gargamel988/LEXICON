@@ -3,13 +3,22 @@ import { supabase } from "@/lib/supabase";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Linking from 'expo-linking';
 import { Stack, useRouter } from "expo-router";
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from 'expo-system-ui';
-import { useEffect } from 'react';
-import { ActivityIndicator, AppState, View } from "react-native";
+import { useEffect, useState } from 'react';
+import { AppState } from "react-native";
+import Toast from 'react-native-toast-message';
+import { CustomSplashScreen } from "../components/Common/CustomSplashScreen";
+import { lexiconToastConfig } from '../components/Common/LexiconToast';
 import Colors from '../constants/Colors';
+import { adService } from "../services/adService";
+import { statsService } from '../services/statsService';
 
 const queryClient = new QueryClient();
+
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync().catch(() => { /* Reloading in dev might cause this to fail */ });
 
 // URL'den tokenları ayıkla (Supabase hash/fragment kullanır)
 function parseSupabaseUrl(url: string) {
@@ -28,6 +37,7 @@ function parseSupabaseUrl(url: string) {
 // Auth durumunu ve yükleme ekranını yöneten alt bileşen
 function RootContent() {
   const { loading, user } = useAuth();
+  const [showSplash, setShowSplash] = useState(true);
   const router = useRouter();
   const url = Linking.useURL();
 
@@ -62,11 +72,16 @@ function RootContent() {
     }
   }, [user?.id]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading) {
+      // Native splash'i gizle, kendi animasyonlu splash'imizi gösteriyoruz
+      SplashScreen.hideAsync().catch(() => { });
+    }
+  }, [loading]);
+
+  if (loading || showSplash) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator size="large" color={Colors.correct.main} />
-      </View>
+      <CustomSplashScreen onAnimationComplete={() => setShowSplash(false)} />
     );
   }
 
@@ -82,12 +97,6 @@ function RootContent() {
     </>
   );
 }
-
-import Toast from 'react-native-toast-message';
-import { lexiconToastConfig } from '../components/Common/LexiconToast';
-
-import { adService } from "../services/adService";
-import { statsService } from '../services/statsService';
 
 export default function RootLayout() {
   useEffect(() => {
