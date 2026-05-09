@@ -28,6 +28,12 @@ export const ProfileSettingsList = ({ onLogout }: ProfileSettingsListProps) => {
       }}>
         Ayarlar
       </Text>
+
+      <SettingsRow
+        icon="albums-outline"
+        label="Koleksiyonlarım"
+        onPress={() => router.push('/(profile)/collections')}
+      />
       <SettingsRow
         icon="trophy-outline"
         label="Başarımlar"

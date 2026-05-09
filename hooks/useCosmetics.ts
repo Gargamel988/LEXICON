@@ -6,16 +6,18 @@ import { supabase } from "../lib/supabase";
 const QUERY_OWNED = (userId: string) => ["cosmetics_owned", userId];
 const QUERY_ACTIVE = (userId: string) => ["cosmetics_active", userId];
 
-// ─── Sahip olunan kozmetikleri çek (Çerçeve + İsimlik) ───
-async function fetchOwnedCosmetics(userId: string): Promise<string[]> {
+// ─── Sahip olunan varlıkları çek (Çerçeve, İsimlik, Unvan vb.) ───
+async function fetchOwnedAssets(userId: string, type: 'frame' | 'nametag' | 'title'): Promise<string[]> {
   const { data, error } = await supabase
-    .from("user_cosmetics")
-    .select("product_id")
-    .eq("user_id", userId);
+    .from("user_assets")
+    .select("asset_id")
+    .eq("user_id", userId)
+    .eq("asset_type", type);
+  
   if (error) throw error;
   
-  const ids = data?.map((d) => d.product_id) ?? [];
-  if (!ids.includes(FREE_FRAME_ID)) ids.unshift(FREE_FRAME_ID);
+  const ids = data?.map((d) => d.asset_id) ?? [];
+  if (type === 'frame' && !ids.includes(FREE_FRAME_ID)) ids.unshift(FREE_FRAME_ID);
   return ids;
 }
 
@@ -34,28 +36,13 @@ async function fetchActiveCosmetics(userId: string) {
   };
 }
 
-// ─── Sahip olunan unvanları çek ───
-async function fetchOwnedTitles(userId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("user_titles")
-    .select("title_id")
-    .eq("user_id", userId);
-  if (error) throw error;
-  return data?.map((d) => d.title_id) ?? [];
-}
-
 // ─── Aktif kozmetiği kaydet ───
 async function persistActiveCosmetic(
   userId: string,
   type: 'frame' | 'nametag' | 'title',
   id: string | null,
 ): Promise<void> {
-  const payload: {
-    user_id: string;
-    active_frame?: string | null;
-    active_nametag?: string | null;
-    active_title?: string | null;
-  } = { user_id: userId };
+  const payload: any = { user_id: userId, updated_at: new Date().toISOString() };
 
   if (type === 'frame') payload.active_frame = id;
   else if (type === 'nametag') payload.active_nametag = id;
@@ -69,9 +56,10 @@ async function persistActiveCosmetic(
 }
 
 // ─── Elmasla satın al ───
-async function purchaseCosmeticWithCoins(
+async function purchaseAssetWithCoins(
   userId: string,
   productId: string,
+  type: 'frame' | 'nametag' | 'title',
   coinPrice: number,
 ): Promise<void> {
   // 1. Elmas bakiyesini kontrol et
@@ -94,12 +82,16 @@ async function purchaseCosmeticWithCoins(
 
   if (updateErr) throw new Error("Elmas tahsil edilemedi");
 
-  // 3. Kozmetik kaydını ekle
+  // 3. Varlık kaydını ortak tabloya ekle
   const { error: insertErr } = await supabase
-    .from("user_cosmetics")
-    .insert({ user_id: userId, product_id: productId });
+    .from("user_assets")
+    .insert({ 
+      user_id: userId, 
+      asset_id: productId, 
+      asset_type: type 
+    });
 
-  if (insertErr) throw new Error("Kozmetik kaydedilemedi");
+  if (insertErr) throw new Error("Varlık kaydedilemedi");
 }
 
 export function useCosmetics(userId: string | undefined) {
@@ -107,7 +99,7 @@ export function useCosmetics(userId: string | undefined) {
 
   const ownedQuery = useQuery({
     queryKey: QUERY_OWNED(userId ?? ""),
-    queryFn: () => fetchOwnedCosmetics(userId!),
+    queryFn: () => fetchOwnedAssets(userId!, 'frame'),
     enabled: !!userId,
   });
 
@@ -119,7 +111,7 @@ export function useCosmetics(userId: string | undefined) {
 
   const titleQuery = useQuery({
     queryKey: ["titles_owned", userId ?? ""],
-    queryFn: () => fetchOwnedTitles(userId!),
+    queryFn: () => fetchOwnedAssets(userId!, 'title'),
     enabled: !!userId,
   });
 
@@ -133,11 +125,13 @@ export function useCosmetics(userId: string | undefined) {
   });
 
   const buyMutation = useMutation({
-    mutationFn: ({ id, price }: { id: string; price: number }) => 
-      purchaseCosmeticWithCoins(userId!, id, price),
+    mutationFn: ({ id, price, type }: { id: string; price: number; type: 'frame' | 'nametag' | 'title' }) => 
+      purchaseAssetWithCoins(userId!, id, type, price),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["coins", userId] });
       queryClient.invalidateQueries({ queryKey: QUERY_OWNED(userId ?? "") });
       queryClient.invalidateQueries({ queryKey: ["inventory", userId] });
+      queryClient.invalidateQueries({ queryKey: ["titles_owned", userId] });
     },
   });
 
@@ -167,11 +161,13 @@ export function useCosmetics(userId: string | undefined) {
     setActiveTitle: (id: string | null) => setActiveMutation.mutateAsync({ type: 'title', id }),
     isSettingActive: setActiveMutation.isPending,
 
-    buyCosmetic: (id: string, price: number) => buyMutation.mutateAsync({ id, price }),
+    buyCosmetic: (id: string, price: number, type: 'frame' | 'nametag' | 'title') => 
+      buyMutation.mutateAsync({ id, price, type }),
     isBuying: buyMutation.isPending,
     
-    buyFrame: (id: string, price: number) => buyMutation.mutateAsync({ id, price }),
-    buyNameTag: (id: string, price: number) => buyMutation.mutateAsync({ id, price }),
+    buyFrame: (id: string, price: number) => buyMutation.mutateAsync({ id, price, type: 'frame' }),
+    buyNameTag: (id: string, price: number) => buyMutation.mutateAsync({ id, price, type: 'nametag' }),
+    buyTitle: (id: string, price: number) => buyMutation.mutateAsync({ id, price, type: 'title' }),
   };
 }
 

@@ -40,6 +40,7 @@ export default function GameScreen() {
     isVisible: boolean;
     isFairPlay: boolean;
     backgroundStats?: { count: number; totalTime: number };
+    droppedCard?: any;
   }>({ status: 'win', guesses: 0, isVisible: false, isFairPlay: true });
 
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -57,7 +58,14 @@ export default function GameScreen() {
           visibilityTime: 4000
         });
       }
+      
+      // Kart düşmüşse result state'e aktarılması için sakla
+      if (res.droppedCard) {
+        setResult(prev => ({ ...prev, droppedCard: res.droppedCard }));
+      }
+
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['userCards', user?.id] });
     }
   });
 
@@ -107,7 +115,8 @@ export default function GameScreen() {
       }
 
       setTimeout(() => {
-        setResult({ 
+        setResult(prev => ({ 
+          ...prev,
           status: 'win', 
           guesses: attempts, 
           isVisible: true,
@@ -116,7 +125,7 @@ export default function GameScreen() {
             count: fairPlayData?.backgroundCount ?? 0,
             totalTime: fairPlayData?.backgroundTotalTime ?? 0
           }
-        });
+        }));
       }, 1500);
     },
     onFail: async (attempts: number, fairPlayData) => {
@@ -265,6 +274,7 @@ export default function GameScreen() {
         category={category}
         isFairPlay={result.isFairPlay}
         backgroundStats={result.backgroundStats}
+        droppedCard={result.droppedCard}
         onRestart={() => startNewGame(category, wordLength)}
         onNewGame={() => {
           setResult(p => ({ ...p, isVisible: false }));

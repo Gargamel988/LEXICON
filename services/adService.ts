@@ -11,6 +11,8 @@ import { AD_CONFIG, AD_UNIT_IDS } from "../constants/ads";
 class AdService {
   private interstitial: InterstitialAd | null = null;
   private appOpenAd: AppOpenAd | null = null;
+  private appOpenCount = 0;
+  private MAX_APP_OPEN_ADS = 2;
   private gameCounter = 0;
   private STORAGE_KEY = "@game_ad_counter";
   public isAdFree = false;
@@ -38,8 +40,11 @@ class AdService {
 
   async showAppOpenAd() {
     if (this.isAdFree) return;
+    if (this.appOpenCount >= this.MAX_APP_OPEN_ADS) return;
+
     if (this.appOpenAd?.loaded) {
       this.appOpenAd.show();
+      this.appOpenCount++;
     } else {
       this.appOpenAd?.load();
     }
@@ -112,7 +117,7 @@ class AdService {
       onError?.();
     });
 
-    rewarded.addAdEventListener(AdEventType.LOADED, () => {
+    rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
       rewarded.show();
     });
 

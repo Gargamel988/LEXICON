@@ -14,7 +14,9 @@ export const BannerAd: React.FC<BannerAdProps> = ({ size = BannerAdSize.ANCHORED
   const { user } = useAuth();
   const { data: profile } = useProfile(user?.id);
 
-  if (profile?.no_ads || adService.isAdFree) return null;
+  const isPremiumValid = profile?.is_premium && (!profile.premium_until || new Date(profile.premium_until) > new Date());
+
+  if (isPremiumValid || adService.isAdFree) return null;
 
   // Web'de reklam gösterme
   if (Platform.OS === 'web') return null;

@@ -7,7 +7,7 @@ const { resolver: { sourceExts, assetExts } } = config;
 config.resolver = {
   ...config.resolver,
   sourceExts: [...sourceExts, 'cjs'],
-  resolverMainFields: ['sbmodern', 'browser', 'main'],
+  resolverMainFields: ['react-native', 'sbmodern', 'browser', 'main'],
 };
 
 module.exports = config;

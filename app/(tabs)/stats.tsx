@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,12 +43,20 @@ export default function StatsScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   // React Query ile verileri çek
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, refetch } = useQuery({
     queryKey: ['stats', user?.id, tab],
     queryFn: () => statsService.getModeStats(user!.id, tab),
     enabled: !!user,
     staleTime: 1000 * 60 * 5,
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
   useEffect(() => {
     const index = TABS.findIndex(m => m.id === tab);
     if (index !== -1 && scrollViewRef.current) {
@@ -178,6 +186,15 @@ export default function StatsScreen() {
               gap: 16,
             }}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={accent}
+                colors={[accent]}
+                style={{ backgroundColor: "transparent" }}
+              />
+            }
           >
             {isLoading ? (
               <View style={{ flex: 1, paddingVertical: 100, justifyContent: 'center', alignItems: 'center' }}>

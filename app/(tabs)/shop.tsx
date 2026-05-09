@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -12,6 +13,11 @@ import Toast from 'react-native-toast-message';
 import { BannerAd } from '../../components/Ads/BannerAd';
 import { FramesSection } from '../../components/Cosmetics/FramesSection';
 import { NameTagsSection } from '../../components/Cosmetics/NameTagsSection';
+import { BundleSection } from '../../components/Shop/BundleSection';
+import { FreeGemButton } from '../../components/Shop/FreeGemButton';
+import { GemMarket } from '../../components/Shop/GemMarket';
+import { PowerUpSection } from '../../components/Shop/PowerUpSection';
+import { UltimateBundle } from '../../components/Shop/UltimateBundle';
 import { AD_UNIT_IDS } from '../../constants/ads';
 import Colors from '../../constants/Colors';
 import { POWER_UP_DEFINITIONS, PowerUpKey } from '../../constants/powerUps';
@@ -21,53 +27,48 @@ import { useInventory } from '../../hooks/useInventory';
 import { useProfile } from '../../hooks/useProfile';
 import { useResponsive } from '../../hooks/useResponsive';
 import { adService } from '../../services/adService';
+import { iapService } from '../../services/iapService';
 import { POWER_UP_PRICES } from '../../services/inventoryService';
-
-// Shop Components
-import { BundleSection } from '../../components/Shop/BundleSection';
-import { FreeGemButton } from '../../components/Shop/FreeGemButton';
-import { GemMarket } from '../../components/Shop/GemMarket';
-import { PowerUpSection } from '../../components/Shop/PowerUpSection';
-import { UltimateBundle } from '../../components/Shop/UltimateBundle';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ─── TİCARİ PAKET TANIMLARI ───
+// \u2500\u2500\u2500 T\u0130CAR\u0130 PAKET TANIMLARI \u2500\u2500\u2500
 const BUNDLE_PACKAGES = [
   {
     id: 'bundle_starter',
-    label: 'Başlangıç Seti',
-    price: '₺99,99',
+    label: 'Ba\u015Flang\u0131\u00E7 Seti',
+    price: '\u20BA99,99',
     color: '#82b1ff',
     badge: null,
-    desc: '1.000 Elmas & 5 İpucu',
+    desc: '1.000 Elmas & 5 ipucu',
     icon: 'rocket-launch-outline',
   },
   {
     id: 'bundle_monthly_adfree',
-    label: 'Aylık Premium',
-    price: '₺29,99',
+    label: 'Ayl\u0131k Premium',
+    price: '\u20BA29,99',
     color: '#fbbf24',
-    badge: 'YENİ',
-    desc: 'Reklamsız + 200 Elmas',
+    badge: 'YEN\u0130',
+    desc: 'Reklams\u0131z + 200 Elmas + G\u00FCnl\u00FCk 10 Bonus',
     icon: 'shield-check-outline',
   },
   {
     id: 'bundle_mega',
     label: 'Mega Paket',
-    price: '₺349,99',
+    price: '\u20BA349,99',
     color: '#c084fc',
-    badge: 'EN POPÜLER',
-    desc: '5.000 Elmas & 20 Bomba',
+    badge: 'EN POP\u00DCLER',
+    desc: '5.000 Elmas + 20 Bomba + Mega \u00C7er\u00E7eve',
     icon: 'fire-circle',
   },
 ];
 
 const COIN_PACKAGES = [
-  { id: 'coins_100', coins: 100, price: '₺34,99', color: '#ffd54f', bonus: null },
-  { id: 'coins_500', coins: 500, price: '₺129,99', color: '#ffd54f', bonus: '+100 BONUS' }, // Yeni paket
-  { id: 'coins_1000', coins: 1000, price: '₺249,99', color: '#ffd54f', bonus: '+250 BONUS' },
-  { id: 'coins_5000', coins: 5000, price: '₺999,99', color: '#ffd54f', bonus: '+1.500 BONUS' },
+  { id: 'coins_100', coins: 100, price: '\u20BA19,99', color: '#ffd54f', bonus: null },
+  { id: 'coins_500', coins: 750, price: '\u20BA129,99', color: '#ffd54f', bonus: '+250 BONUS' },
+  { id: 'coins_1000', coins: 1750, price: '\u20BA249,99', color: '#ffd54f', bonus: '+750 BONUS' },
+  { id: 'coins_2000', coins: 3000, price: '\u20BA499,99', color: '#ffd54f', bonus: '+1.000 BONUS' },
+  { id: 'coins_5000', coins: 8500, price: '\u20BA999,99', color: '#ffd54f', bonus: '+3.500 BONUS' },
 ];
 
 const SHOP_POWER_UPS: PowerUpKey[] = Object.keys(POWER_UP_DEFINITIONS) as PowerUpKey[];
@@ -76,13 +77,39 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const { moderateScale, wp } = useResponsive();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { coins, purchase, giveAdReward, isAdRewarding } = useInventory(user?.id);
   const { data: profile } = useProfile(user?.id);
 
   const [buyingKey, setBuyingKey] = useState<PowerUpKey | null>(null);
+  const [isAdLoading, setIsAdLoading] = useState(false);
+  const [isPurchasingId, setIsPurchasingId] = useState<string | null>(null);
 
-  const handleBuyIAP = () =>
-    Toast.show({ type: 'info', text1: 'Ödeme Sistemi', text2: 'Mağaza entegrasyonu test aşamasında.', position: 'top' });
+  const handleBuyIAP = async (product: string | { id: string }) => {
+    if (!user?.id) return;
+    const productId = typeof product === 'string' ? product : product.id;
+
+    setIsPurchasingId(productId);
+    try {
+      const result = await iapService.purchaseProduct(productId, user.id);
+      if (result.success) {
+        Toast.show({ type: 'success', text1: 'Satın Alma Başarılı! 🎉', text2: 'Ürün envanterine eklendi.', position: 'top' });
+        // Bakiyeyi ve envanteri tazele
+        queryClient.invalidateQueries({ queryKey: ['coins', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['inventory', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['cosmetics_owned', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['cosmetics_active', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+      } else if (result.error) {
+        Toast.show({ type: 'error', text1: 'Satın Alma Hatası', text2: result.error, position: 'top' });
+      }
+    } catch (err) {
+      console.error('Purchase error:', err);
+      Toast.show({ type: 'error', text1: 'Hata', text2: 'İşlem sırasında bir sorun oluştu.', position: 'top' });
+    } finally {
+      setIsPurchasingId(null);
+    }
+  };
 
   const handleBuyPowerUp = async (key: PowerUpKey) => {
     const price = POWER_UP_PRICES[key] ?? 50;
@@ -110,15 +137,20 @@ export default function ShopScreen() {
   };
 
   const handleWatchAd = () => {
+    setIsAdLoading(true);
     adService.showRewardedAd(
       AD_UNIT_IDS.REWARDED_DAILY,
       async () => {
+        setIsAdLoading(false);
         const result = await giveAdReward();
         if (result.success) {
           Toast.show({ type: 'success', text1: '+20 Elmas Kazandın! 🎉', position: 'top' });
         }
       },
-      () => Toast.show({ type: 'error', text1: 'Hata', text2: 'Reklam yüklenemedi.', position: 'top' })
+      () => {
+        setIsAdLoading(false);
+        Toast.show({ type: 'error', text1: 'Hata', text2: 'Reklam yüklenemedi.', position: 'top' });
+      }
     );
   };
 
@@ -150,13 +182,24 @@ export default function ShopScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        <UltimateBundle onBuy={handleBuyIAP} />
+        <UltimateBundle
+          onBuy={() => handleBuyIAP('bundle_ultimate')}
+          isLoading={isPurchasingId === 'bundle_ultimate'}
+        />
 
-        <FreeGemButton onWatchAd={handleWatchAd} isLoading={isAdRewarding} />
+        <FreeGemButton onWatchAd={handleWatchAd} isLoading={isAdLoading || isAdRewarding} />
 
-        <BundleSection bundles={BUNDLE_PACKAGES} onBuy={handleBuyIAP} />
+        <BundleSection
+          bundles={BUNDLE_PACKAGES}
+          onBuy={handleBuyIAP}
+          loadingId={isPurchasingId}
+        />
 
-        <GemMarket packages={COIN_PACKAGES} onBuy={handleBuyIAP} />
+        <GemMarket
+          packages={COIN_PACKAGES}
+          onBuy={handleBuyIAP}
+          loadingId={isPurchasingId}
+        />
 
         <PowerUpSection
           powerUpKeys={SHOP_POWER_UPS}

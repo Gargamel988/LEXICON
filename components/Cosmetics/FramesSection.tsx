@@ -2,12 +2,14 @@
  * FramesSection — Shop içindeki çerçeveler bölümü
  */
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { FRAMES } from '../../constants/frames';
 import { useCosmetics } from '../../hooks/useCosmetics';
 import { useResponsive } from '../../hooks/useResponsive';
+import { iapService } from '../../services/iapService';
 import { FrameCard } from './FrameCard';
 
 interface Props {
@@ -20,6 +22,7 @@ interface Props {
 
 export const FramesSection = ({ userId, coins, avatarUrl, username, cardWidth }: Props) => {
   const { moderateScale } = useResponsive();
+  const queryClient = useQueryClient();
   const {
     ownedFrames,
     activeFrame,
@@ -95,13 +98,21 @@ export const FramesSection = ({ userId, coins, avatarUrl, username, cardWidth }:
           { text: 'İptal', style: 'cancel' },
           {
             text: 'Satın Al',
-            onPress: () => {
-              Toast.show({
-                type: 'info',
-                text1: 'Yakında!',
-                text2: 'Gerçek para ödeme entegrasyonu yakında eklenecektir.',
-                position: 'top',
-              });
+            onPress: async () => {
+              setBuyingId(frame.id);
+              try {
+                const result = await iapService.purchaseProduct(frame.id, userId);
+                if (result.success) {
+                  Toast.show({ type: 'success', text1: `${frame.name} açıldı! ✨`, position: 'top' });
+                  queryClient.invalidateQueries({ queryKey: ['cosmetics_owned', userId] });
+                } else if (result.error) {
+                  Toast.show({ type: 'error', text1: 'Hata', text2: result.error, position: 'top' });
+                }
+              } catch (e: any) {
+                Toast.show({ type: 'error', text1: 'Beklenmedik bir hata oluştu', position: 'top' });
+              } finally {
+                setBuyingId(null);
+              }
             },
           },
         ]

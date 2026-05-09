@@ -16,9 +16,10 @@ interface GemPack {
 interface GemMarketProps {
   packages: GemPack[];
   onBuy: (pkg: GemPack) => void;
+  loadingId?: string | null;
 }
 
-export const GemMarket: React.FC<GemMarketProps> = ({ packages, onBuy }) => {
+export const GemMarket: React.FC<GemMarketProps> = ({ packages, onBuy, loadingId }) => {
   const { moderateScale, wp } = useResponsive();
 
   return (
@@ -31,11 +32,17 @@ export const GemMarket: React.FC<GemMarketProps> = ({ packages, onBuy }) => {
           <Pressable
             key={pkg.id}
             onPress={() => onBuy(pkg)}
-            style={{
+            disabled={!!loadingId}
+            style={({ pressed }) => ({
               width: 140,
-
-              backgroundColor: Colors.card, borderRadius: 20, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: pkg.bonus ? Colors.correct.main : Colors.border
-            }}
+              backgroundColor: Colors.card,
+              borderRadius: 20,
+              padding: 20,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: pkg.bonus ? Colors.correct.main : Colors.border,
+              opacity: (pressed || (loadingId === pkg.id)) ? 0.8 : 1,
+            })}
           >
             {pkg.bonus && (
               <View style={{ position: 'absolute', top: -10, alignSelf: 'center', backgroundColor: Colors.correct.main, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, zIndex: 5 }}>
@@ -47,7 +54,9 @@ export const GemMarket: React.FC<GemMarketProps> = ({ packages, onBuy }) => {
             <Text style={{ color: Colors.textSecondary, fontSize: 10, fontWeight: '700', marginTop: 2 }}>ELMAS</Text>
             <View style={{ width: '100%', height: 1, backgroundColor: Colors.border, marginVertical: 12 }} />
             <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 'auto', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border }}>
-              <Text style={{ color: Colors.text, fontWeight: '800', fontSize: moderateScale(13) }}>{pkg.price}</Text>
+              <Text style={{ color: Colors.text, fontWeight: '800', fontSize: moderateScale(13) }}>
+                {loadingId === pkg.id ? '...' : pkg.price}
+              </Text>
             </View>
           </Pressable>
         ))}

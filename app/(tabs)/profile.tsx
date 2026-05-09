@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { BannerAd } from '@/components/Ads/BannerAd';
+import { TitlesSection } from '@/components/Cosmetics/TitlesSection';
 
 export default function ProfileScreen() {
   const { user, signOutMutation, loading: authLoading } = useAuth();
@@ -127,53 +128,59 @@ export default function ProfileScreen() {
         <ProfileStatsGrid stats={stats} />
 
         {/* ── Üyelik Durumu ── */}
-        <Pressable
-          onPress={() => !profile?.no_ads && router.push('/(tabs)/shop' as any)}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: profile?.no_ads 
-              ? (pressed ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.08)')
-              : (pressed ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)'),
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: profile?.no_ads ? 'rgba(251,191,36,0.3)' : 'rgba(59,130,246,0.3)',
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            marginBottom: 16,
-          })}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{
-              width: 40, height: 40, borderRadius: 20, 
-              backgroundColor: profile?.no_ads ? 'rgba(251,191,36,0.2)' : 'rgba(59,130,246,0.2)',
-              justifyContent: 'center', alignItems: 'center'
-            }}>
-              <Ionicons 
-                name={profile?.no_ads ? "shield-checkmark" : "shield-outline"} 
-                size={22} 
-                color={profile?.no_ads ? "#fbbf24" : "#3b82f6"} 
-              />
-            </View>
-            <View>
-              <Text style={{ 
-                color: profile?.no_ads ? "#fbbf24" : "#3b82f6", 
-                fontSize: moderateScale(13), 
-                fontWeight: '900',
-                letterSpacing: 0.5
-              }}>
-                {profile?.no_ads ? 'PREMIUM ÜYELİK' : 'REKLAMSIZ OYUN'}
-              </Text>
-              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(10), fontWeight: '600' }}>
-                {profile?.no_ads ? 'Tüm reklamlar devre dışı' : 'Reklamları kaldırmak için tıkla'}
-              </Text>
-            </View>
-          </View>
-          {!profile?.no_ads && (
-            <Ionicons name="chevron-forward" size={18} color="#3b82f6" />
-          )}
-        </Pressable>
+        {(() => {
+          const isPremiumActive = profile?.is_premium && (!profile.premium_until || new Date(profile.premium_until) > new Date());
+          
+          return (
+            <Pressable
+              onPress={() => !isPremiumActive && router.push('/(tabs)/shop' as any)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: isPremiumActive 
+                  ? (pressed ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.08)')
+                  : (pressed ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)'),
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: isPremiumActive ? 'rgba(251,191,36,0.3)' : 'rgba(59,130,246,0.3)',
+                paddingHorizontal: 20,
+                paddingVertical: 16,
+                marginBottom: 16,
+              })}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{
+                  width: 40, height: 40, borderRadius: 20, 
+                  backgroundColor: isPremiumActive ? 'rgba(251,191,36,0.2)' : 'rgba(59,130,246,0.2)',
+                  justifyContent: 'center', alignItems: 'center'
+                }}>
+                  <Ionicons 
+                    name={isPremiumActive ? "shield-checkmark" : "shield-outline"} 
+                    size={22} 
+                    color={isPremiumActive ? "#fbbf24" : "#3b82f6"} 
+                  />
+                </View>
+                <View>
+                  <Text style={{ 
+                    color: isPremiumActive ? "#fbbf24" : "#3b82f6", 
+                    fontSize: moderateScale(13), 
+                    fontWeight: '900',
+                    letterSpacing: 0.5
+                  }}>
+                    {isPremiumActive ? 'PREMIUM ÜYELİK' : 'REKLAMSIZ OYUN'}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: moderateScale(10), fontWeight: '600' }}>
+                    {isPremiumActive ? 'Tüm reklamlar devre dışı' : 'Reklamları kaldırmak için tıkla'}
+                  </Text>
+                </View>
+              </View>
+              {!isPremiumActive && (
+                <Ionicons name="chevron-forward" size={18} color="#3b82f6" />
+              )}
+            </Pressable>
+          );
+        })()}
 
         {/* ── Elmas Bakiyesi ── */}
         <Pressable
@@ -272,6 +279,11 @@ export default function ProfileScreen() {
               })}
             </View>
           )}
+        </View>
+
+        {/* ── Unvan Koleksiyonu ── */}
+        <View style={{ paddingHorizontal: wp(1) }}>
+          <TitlesSection ownedTitlesIds={ownedTitles.map(t => t.id)} />
         </View>
 
         <ProfileSettingsList onLogout={() => signOutMutation.mutate()} />

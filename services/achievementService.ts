@@ -16,16 +16,20 @@ export const achievementService = {
   async getUserAchievements(userId: string): Promise<UserAchievement[]> {
     try {
       const { data, error } = await supabase
-        .from("user_achievements")
-        .select("achievement_id, unlocked_at")
-        .eq("user_id", userId);
+        .from("user_assets")
+        .select("asset_id, unlocked_at")
+        .eq("user_id", userId)
+        .eq("asset_type", "achievement");
 
       if (error) {
         console.error("Error fetching achievements:", error);
         return [];
       }
 
-      return data || [];
+      return (data || []).map(d => ({
+        achievement_id: d.asset_id,
+        unlocked_at: d.unlocked_at
+      }));
     } catch (error) {
       console.error("Achievement fetch error:", error);
       return [];
@@ -54,37 +58,33 @@ export const achievementService = {
 
       // 3. Yeni açılanları kaydeder
       if (newUnlocks.length > 0) {
-        const inserts = newUnlocks.map(id => ({
-          user_id: userId,
-          achievement_id: id,
-        }));
-
         const achievementsToProcess = newUnlocks.map(id => ACHIEVEMENTS.find(a => a.id === id)).filter(Boolean) as Achievement[];
+        
+        // Tüm varlıkları (başarım, unvan, kozmetik) tek bir array'de topla
+        const assetInserts: any[] = [];
 
-        // ─── Unvan ödüllerini kaydet ───
-        const titleInserts = achievementsToProcess
-          .filter(a => a.rewardTitleId)
-          .map(a => ({
-            user_id: userId,
-            title_id: a.rewardTitleId!
-          }));
+        achievementsToProcess.forEach(a => {
+          // Başarımın kendisi
+          assetInserts.push({ user_id: userId, asset_type: 'achievement', asset_id: a.id });
+          
+          // Unvan ödülü
+          if (a.rewardTitleId) {
+            assetInserts.push({ user_id: userId, asset_type: 'title', asset_id: a.rewardTitleId });
+          }
+          
+          // Kozmetik ödülleri
+          if (a.rewardFrameId) {
+            assetInserts.push({ user_id: userId, asset_type: 'frame', asset_id: a.rewardFrameId });
+          }
+          if (a.rewardNameTagId) {
+            assetInserts.push({ user_id: userId, asset_type: 'nametag', asset_id: a.rewardNameTagId });
+          }
+        });
 
-        if (titleInserts.length > 0) {
-          await supabase.from("user_titles").insert(titleInserts);
-        }
-
-        // ─── Kozmetik ödüllerini (Çerçeve & İsimlik) kaydet ───
-        const cosmeticInserts = achievementsToProcess
-          .filter(a => a.rewardFrameId || a.rewardNameTagId)
-          .flatMap(a => {
-            const items = [];
-            if (a.rewardFrameId) items.push({ user_id: userId, product_id: a.rewardFrameId });
-            if (a.rewardNameTagId) items.push({ user_id: userId, product_id: a.rewardNameTagId });
-            return items;
-          });
-
-        if (cosmeticInserts.length > 0) {
-          await supabase.from("user_cosmetics").insert(cosmeticInserts);
+        // ─── Toplu Varlık Kaydı ───
+        if (assetInserts.length > 0) {
+          const { error } = await supabase.from("user_assets").upsert(assetInserts, { onConflict: 'user_id,asset_type,asset_id' });
+          if (error) console.error("Error saving user assets:", error);
         }
 
         // ─── Power-up ödüllerini kaydet ───
@@ -118,28 +118,22 @@ export const achievementService = {
           await levelService.addExperience(userId, totalXpReward);
         }
 
-        // ─── Başarım kaydı ───
-        const { error } = await supabase.from("user_achievements").insert(inserts);
-        if (error) {
-          console.error("Error saving new achievements:", error);
-        } else {
-          // Başarılı kayıttan sonra bildirim göster
-          achievementsToProcess.forEach(achievement => {
-            let rewardMsg = "";
-            if (achievement.rewardTitleId) rewardMsg = "🎖️ Yeni Unvan!";
-            else if (achievement.rewardFrameId || achievement.rewardNameTagId) rewardMsg = "✨ Yeni Kozmetik!";
-            else if (achievement.rewardPowerUp) rewardMsg = "⚡ Güçlendirme!";
-            else rewardMsg = "🏆 Başarım Kazanıldı!";
+        // ─── Bildirim göster ───
+        achievementsToProcess.forEach(achievement => {
+          let rewardMsg = "";
+          if (achievement.rewardTitleId) rewardMsg = "🎖️ Yeni Unvan!";
+          else if (achievement.rewardFrameId || achievement.rewardNameTagId) rewardMsg = "✨ Yeni Kozmetik!";
+          else if (achievement.rewardPowerUp) rewardMsg = "⚡ Güçlendirme!";
+          else rewardMsg = "🏆 Başarım Kazanıldı!";
 
-            Toast.show({
-              type: 'success',
-              text1: rewardMsg,
-              text2: `${achievement.title} açıldı!`,
-              position: 'top',
-              visibilityTime: 4000,
-            });
+          Toast.show({
+            type: 'success',
+            text1: rewardMsg,
+            text2: `${achievement.title} açıldı!`,
+            position: 'top',
+            visibilityTime: 4000,
           });
-        }
+        });
         
         return newUnlocks;
       }

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,7 +51,7 @@ export default function LeaderboardScreen() {
     MODES.find(m => m.id === selectedMode) || MODES[0]
     , [selectedMode]);
 
-  const { data: leaderboardData = [], isLoading: isLeaderboardLoading } = useQuery({
+  const { data: leaderboardData = [], isLoading: isLeaderboardLoading, refetch: refetchLeaderboard } = useQuery({
     queryKey: ['leaderboard', period, selectedMode],
     queryFn: async () => {
       let data;
@@ -64,7 +64,7 @@ export default function LeaderboardScreen() {
     },
   });
 
-  const { data: userRankInfo, isLoading: isUserRankLoading } = useQuery({
+  const { data: userRankInfo, isLoading: isUserRankLoading, refetch: refetchUserRank } = useQuery({
     queryKey: ['userRank', period, selectedMode, user?.id],
     queryFn: async () => {
       if (!user) return null;
@@ -75,6 +75,17 @@ export default function LeaderboardScreen() {
     },
     enabled: !!user,
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refetchLeaderboard(),
+      refetchUserRank()
+    ]);
+    setRefreshing(false);
+  }, [refetchLeaderboard, refetchUserRank]);
 
   const loading = isLeaderboardLoading || (!!user && isUserRankLoading);
 
@@ -245,6 +256,15 @@ export default function LeaderboardScreen() {
                 ListHeaderComponent={renderHeader}
                 contentContainerStyle={{ padding: spacing.md, paddingBottom: 160 }}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={currentModeConfig.color}
+                    colors={[currentModeConfig.color]}
+                    style={{ backgroundColor: '#0a0a0f' }}
+                  />
+                }
               />
             )}
           </Animated.View>

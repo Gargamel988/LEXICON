@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { inventoryService } from '../../services/inventoryService';
 import Toast from 'react-native-toast-message';
 import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
+import { WinConfetti } from '../Common/WinConfetti';
 
 interface ResultModalProps {
   isVisible: boolean;
@@ -33,6 +34,7 @@ interface ResultModalProps {
   isFairPlay?: boolean;
   backgroundStats?: { count: number; totalTime: number };
   onRecoverLife?: () => void;
+  droppedCard?: any;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -52,7 +54,8 @@ const ResultModal: React.FC<ResultModalProps> = ({
   category,
   isFairPlay = true,
   backgroundStats,
-  onRecoverLife
+  onRecoverLife,
+  droppedCard
 }) => {
   const { user } = useAuth();
   const [isRewardDoubled, setIsRewardDoubled] = React.useState(false);
@@ -279,6 +282,9 @@ const ResultModal: React.FC<ResultModalProps> = ({
       alignItems: 'center',
       zIndex: 1000,
     }}>
+      {/* Victory Confetti (Skia) */}
+      {isVisible && isWin && <WinConfetti />}
+
       {/* Backdrop */}
       <Animated.View style={[
         {
@@ -485,6 +491,22 @@ const ResultModal: React.FC<ResultModalProps> = ({
                  <Text style={{ color: 'gold', fontWeight: '900' }}>x2</Text>
               </View>
             </Pressable>
+          )}
+
+          {/* Collection Card Drop Section */}
+          {isWin && droppedCard && (
+            <View style={{ borderTopWidth: 1, borderTopColor: Colors.glass, marginTop: 15, paddingTop: 15 }}>
+              <Text style={{ color: Colors.accent, textAlign: 'center', fontWeight: '800', marginBottom: 8 }}>YENİ KOLEKSİYON KARTI! 🃏</Text>
+              <View style={{ backgroundColor: Colors.glass, padding: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ backgroundColor: droppedCard.rarity === 'legendary' ? '#FFD70033' : (droppedCard.rarity === 'rare' ? '#4169E133' : '#A9A9A933'), width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="card" size={24} color={droppedCard.rarity === 'legendary' ? '#FFD700' : (droppedCard.rarity === 'rare' ? '#4169E1' : '#A9A9A9')} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 16, fontWeight: 'bold' }}>{droppedCard.title}</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>{droppedCard.alreadyOwned ? 'Zaten sende vardı (Puan eklendi)' : 'Koleksiyona eklendi!'}</Text>
+                </View>
+              </View>
+            </View>
           )}
 
           {isRewardDoubled && (

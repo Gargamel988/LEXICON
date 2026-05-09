@@ -51,22 +51,48 @@ export const NameTagsSection = ({ userId, coins, username }: Props) => {
   };
 
   const handleBuy = (item: typeof NAMETAGS[0]) => {
-    const itemPrice = item.price || 'Ücretsiz';
-    
-    Alert.alert(
-      'Satın Al',
-      `${item.name} isimliğini ${itemPrice} karşılığında satın almak istiyor musun?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Satın Al',
-          onPress: async () => {
-            // Gerçek IAP entegrasyonu (Yakında)
-            Toast.show({ type: 'info', text1: 'Yakında!', text2: 'Gerçek para ödeme entegrasyonu yakında eklenecektir.', position: 'top' });
+    if (item.coinPrice !== null) {
+      if (coins < item.coinPrice) {
+        Toast.show({
+          type: 'error',
+          text1: 'Yetersiz Elmas',
+          text2: `${item.coinPrice} elmas gerekiyor.`,
+          position: 'top',
+        });
+        return;
+      }
+
+      Alert.alert(
+        'İsimlik Satın Al',
+        `${item.name} için ${item.coinPrice} elmas harcamak istiyor musun?`,
+        [
+          { text: 'İptal', style: 'cancel' },
+          {
+            text: 'Satın Al',
+            onPress: async () => {
+              setBuyingId(item.id);
+              try {
+                await buyCosmetic(item.id, item.coinPrice!);
+                Toast.show({
+                  type: 'success',
+                  text1: `${item.name} kazanıldı! 🎉`,
+                  position: 'top',
+                });
+              } catch (e: any) {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Satın alma başarısız',
+                  text2: e?.message || 'Bir sorun oluştu',
+                  position: 'top',
+                });
+              } finally {
+                setBuyingId(null);
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   return (
@@ -89,7 +115,7 @@ export const NameTagsSection = ({ userId, coins, username }: Props) => {
           fontSize: moderateScale(9), fontWeight: '800',
           letterSpacing: 1.5, textTransform: 'uppercase',
         }}>
-          PREMIUM
+          KOZMETİK
         </Text>
       </View>
 
@@ -102,6 +128,7 @@ export const NameTagsSection = ({ userId, coins, username }: Props) => {
             name: 'Varsayılan',
             image: null,
             price: null,
+            coinPrice: null,
             rarity: 'common',
             description: 'Standart görünüm'
           }}

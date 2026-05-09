@@ -28,15 +28,15 @@ export const AD_REWARD_COINS = 20;
 
 // Oyun kazanınca verilen coin (mod bazlı)
 export const WIN_REWARD_COINS: Record<string, number> = {
-  classic: 10,
-  daily: 25,
-  survival: 20,
-  climb: 15,
-  blitz: 15,
-  blind: 20,
-  multi: 10,
-  battle: 20,
-  bomb: 15,
+  classic: 5,
+  daily: 10,
+  survival: 8,
+  climb: 6,
+  blitz: 6,
+  blind: 8,
+  multi: 5,
+  battle: 8,
+  bomb: 6,
 };
 
 export interface InventoryItem {

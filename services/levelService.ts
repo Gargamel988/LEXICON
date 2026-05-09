@@ -55,8 +55,12 @@ export const levelService = {
       };
 
       if (leveledUp) {
-        // Seviye atlama ödüllerini hesapla - Elmas azaltıldı (level * 10)
-        const coinsReward = currentLevel * 10;
+        // Seviye atlama ödüllerini hesapla - Kademeli ödül sistemi
+        let coinsReward = 10;
+        if (currentLevel > 50) coinsReward = 50;
+        else if (currentLevel > 30) coinsReward = 30;
+        else if (currentLevel > 10) coinsReward = 20;
+
         result.rewards.coins = coinsReward;
         updates.coins = (profile.coins || 0) + coinsReward;
 

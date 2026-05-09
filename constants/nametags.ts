@@ -8,6 +8,7 @@ export interface NameTag {
   image: ImageSourcePropType | null;
   rarity: Rarity;
   price: string | null;
+  coinPrice: number | null;
   description: string;
   paddingHorizontal?: number;
   fontSizeMultiplier?: number;
@@ -21,7 +22,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Kızıl Parşömen",
     image: require("../assets/nametags/nameplate_crimson_scroll.png"),
     rarity: "epic",
-    price: '₺29,99',
+    price: null,
+    coinPrice: 300,
     description: "Antik rünlerle bezeli kızıl bir parşömen.",
     paddingHorizontal: 30,
     fontSizeMultiplier: 0.9,
@@ -33,7 +35,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Kristal Galaksi",
     image: require("../assets/nametags/nameplate_crystal_galaxy.png"),
     rarity: "legendary",
-    price: '₺89,99',
+    price: null,
+    coinPrice: 900,
     description: "Yıldız tozları ve kristal yansımalar.",
     paddingHorizontal: 25,
     fontSizeMultiplier: 1.1,
@@ -45,7 +48,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Karanlık Diken",
     image: require("../assets/nametags/nameplate_dark_thorn.png"),
     rarity: "rare",
-    price: '₺19,99',
+    price: null,
+    coinPrice: 200,
     description: "Gizemli ve tehlikeli bir görünüm.",
     paddingHorizontal: 20,
     fontSizeMultiplier: 1.0,
@@ -57,7 +61,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Ejderha Ateşi",
     image: require("../assets/nametags/nameplate_dragon_flame.png"),
     rarity: "legendary",
-    price: '₺129,99',
+    price: null,
+    coinPrice: 1300,
     description: "Ejderhanın nefesiyle dövülmüş isimlik.",
     paddingHorizontal: 35,
     fontSizeMultiplier: 1.2,
@@ -69,7 +74,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Altın Kanat",
     image: require("../assets/nametags/nameplate_golden_wing.png"),
     rarity: "epic",
-    price: '₺49,99',
+    price: null,
+    coinPrice: 500,
     description: "Zaferin ve asaletin simgesi.",
     paddingHorizontal: 28,
     fontSizeMultiplier: 1.0,
@@ -81,7 +87,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Neon Diken",
     image: require("../assets/nametags/nameplate_neon_spike.png"),
     rarity: "rare",
-    price: '₺29,99',
+    price: null,
+    coinPrice: 300,
     description: "Gelecekten gelen enerjik tasarım.",
     paddingHorizontal: 22,
     fontSizeMultiplier: 1.0,
@@ -93,7 +100,8 @@ export const NAMETAGS: NameTag[] = [
     name: "Mor Dikenler",
     image: require("../assets/nametags/nameplate_thorns_violet.png"),
     rarity: "epic",
-    price: '₺39,99',
+    price: null,
+    coinPrice: 400,
     description: "Zarif ama keskin bir hava.",
     paddingHorizontal: 24,
     fontSizeMultiplier: 1.0,

@@ -15,14 +15,17 @@ export const Colors = {
   correct: {
     main: "#639922",
     dark: "#3B6D11",
+    light: "#8BC34A",
   },
   misplaced: {
     main: "#EF9F27",
     dark: "#BA7517",
+    light: "#FFB74D",
   },
   wrong: {
     main: "#888780",
     dark: "#444441",
+    light: "#BDBDBD",
   },
 
   // UI Accents

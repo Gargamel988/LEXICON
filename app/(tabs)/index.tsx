@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DailyCard from '../../components/Home/DailyCard';
 import ModeCard from '../../components/Home/ModeCard';
 import AuthWarningModal from '../../components/modal/AuthWarningModal';
+import { MissionsModal } from '../../components/modal/MissionsModal';
 import Colors from '../../constants/Colors';
 import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { coins } = useInventory(user?.id);
   const [isAuthWarningVisible, setIsAuthWarningVisible] = React.useState(false);
+  const [isMissionsVisible, setIsMissionsVisible] = React.useState(false);
   const [pendingModeLink, setPendingModeLink] = React.useState<string | null>(null);
 
   const handleModePress = (id: string) => {
@@ -110,6 +112,8 @@ export default function HomeScreen() {
         {/* DAILY FEATURE CARD */}
         <DailyCard />
 
+        {/* QUICK ACCESS BAR */}
+
         {/* GAME MODES SECTION */}
         <View style={{ paddingHorizontal: 20, marginTop: 40 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -144,6 +148,43 @@ export default function HomeScreen() {
           }
         }}
       />
+
+      <MissionsModal
+        isVisible={isMissionsVisible}
+        onClose={() => setIsMissionsVisible(false)}
+      />
+
+      {/* FLOATING MISSIONS BUTTON */}
+      <Pressable
+        onPress={() => {
+          if (!user) {
+            setIsAuthWarningVisible(true);
+          } else {
+            setIsMissionsVisible(true);
+          }
+        }}
+        style={({ pressed }) => ({
+          position: 'absolute',
+          right: 20,
+          bottom: 100, // Bottom tab barın üzerinde kalması için
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: Colors.correct.main,
+          justifyContent: 'center',
+          alignItems: 'center',
+          elevation: 8,
+          shadowColor: Colors.correct.main,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          opacity: pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.95 : 1 }],
+        })}
+      >
+        <Ionicons name="flag" size={24} color="#fff" />
+        {/* Görev bildirimi noktası eklenebilir */}
+      </Pressable>
 
       {/* BANNER REKLAM */}
       <BannerAd />

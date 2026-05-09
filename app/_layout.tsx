@@ -67,7 +67,10 @@ function RootContent() {
   useEffect(() => {
     if (user?.id) {
       statsService.getProfile(user.id).then(profile => {
-        if (profile) adService.isAdFree = !!profile.no_ads;
+        if (profile) {
+          const isPremiumValid = profile.is_premium && (!profile.premium_until || new Date(profile.premium_until) > new Date());
+          adService.isAdFree = isPremiumValid;
+        }
       }).catch(() => { });
     }
   }, [user?.id]);

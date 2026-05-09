@@ -153,7 +153,8 @@ export const statsService = {
       id: string;
       username: string;
       avatar_url: string;
-      no_ads: boolean;
+      is_premium: boolean;
+      premium_until: string;
     };
   },
 
@@ -163,7 +164,7 @@ export const statsService = {
   async saveGameResult(userId: string, result: GameResult) {
     try {
       // Hile şüphesi kontrolü
-      if (result.is_fair_play === false && result.mode !== 'daily') {
+      if (result.is_fair_play === false && result.mode !== "daily") {
         return { success: false, reason: "fair_play_violation" };
       }
 
@@ -192,24 +193,53 @@ export const statsService = {
         return { success: false, reason: "fair_play_violation" };
       }
 
-      if (result.mode === "daily") {
-        await this.updateStreak(userId);
-      }
-
       // XP Ekle
       if (result.score && result.score > 0) {
         await levelService.addExperience(userId, result.score);
       }
 
-      // Başarımları kontrol et (Circular dependency'den kaçınmak için dinamik import)
+      // Başarımları ve Görevleri kontrol et (Dinamik import)
       try {
         const { achievementService } = require("./achievementService");
+        const { missionService } = require("./missionService");
+
         achievementService.checkAndUnlockAchievements(userId, result);
-      } catch (achError) {
-        console.error("Achievement auto-check error:", achError);
+
+        await missionService.updateProgress(userId, "play_games", 1);
+        if (result.is_winner) {
+          await missionService.updateProgress(userId, "win_games", 1);
+          await missionService.updateProgress(userId, "mode_specific", 1, {
+            mode: result.mode,
+          });
+          if (result.solved_count && result.solved_count > 0) {
+            await missionService.updateProgress(
+              userId,
+              "solve_words",
+              result.solved_count,
+            );
+          } else {
+            await missionService.updateProgress(userId, "solve_words", 1);
+          }
+        }
+      } catch (trackError) {
+        console.error("Tracking auto-update error:", trackError);
       }
 
-      return { success: true };
+      // 5. Koleksiyon Kartı Drop Kontrolü (Sadece kazanınca)
+      let droppedCard = null;
+      if (result.is_winner) {
+        try {
+          const { collectionService } = require("./collectionService");
+          // %25 şansla kart düşebilir
+          if (Math.random() < 0.25) {
+            droppedCard = await collectionService.dropRandomCard(userId);
+          }
+        } catch (collectionError) {
+          console.error("Collection drop error:", collectionError);
+        }
+      }
+
+      return { success: true, droppedCard };
     } catch (error) {
       console.error("Lexicon: Error saving game result:", error);
       return { success: false, error };
