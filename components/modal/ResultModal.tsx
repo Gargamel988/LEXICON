@@ -7,15 +7,15 @@ import Animated, {
   withSpring,
   withTiming
 } from 'react-native-reanimated';
-import Colors from '../../constants/Colors';
-import { useResponsive } from '../../hooks/useResponsive';
-import { CellData, Row } from '../../types';
-import { adService } from '../../services/adService';
-import { AD_UNIT_IDS } from '../../constants/ads';
-import { useAuth } from '../../hooks/useAuth';
-import { inventoryService } from '../../services/inventoryService';
 import Toast from 'react-native-toast-message';
-import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
+import { AD_UNIT_IDS } from '../../constants/ads';
+import Colors from '../../constants/Colors';
+import { COIN_ICON } from '../../constants/ui';
+import { useAuth } from '../../hooks/useAuth';
+import { useResponsive } from '../../hooks/useResponsive';
+import { adService } from '../../services/adService';
+import { inventoryService } from '../../services/inventoryService';
+import { CellData, Row } from '../../types';
 import { WinConfetti } from '../Common/WinConfetti';
 
 interface ResultModalProps {
@@ -487,8 +487,8 @@ const ResultModal: React.FC<ResultModalProps> = ({
                 {isDoubleLoading ? "YÜKLENİYOR..." : "ÖDÜLÜ 2X YAP (REKLAM)"}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                 <Ionicons name={COIN_ICON} size={14} color="gold" />
-                 <Text style={{ color: 'gold', fontWeight: '900' }}>x2</Text>
+                <Ionicons name={COIN_ICON} size={14} color="gold" />
+                <Text style={{ color: 'gold', fontWeight: '900' }}>x2</Text>
               </View>
             </Pressable>
           )}
@@ -510,22 +510,22 @@ const ResultModal: React.FC<ResultModalProps> = ({
           )}
 
           {isRewardDoubled && (
-             <View style={{ 
-               height: verticalScale(40), 
-               alignItems: 'center', 
-               justifyContent: 'center',
-               backgroundColor: 'rgba(76, 175, 80, 0.1)',
-               borderRadius: moderateScale(10),
-               borderWidth: 1,
-               borderColor: 'rgba(76, 175, 80, 0.3)'
-             }}>
-                <Text style={{ color: '#4caf50', fontWeight: '800', fontSize: moderateScale(12) }}>✓ ÖDÜL KATLANDI</Text>
-             </View>
+            <View style={{
+              height: verticalScale(40),
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(76, 175, 80, 0.1)',
+              borderRadius: moderateScale(10),
+              borderWidth: 1,
+              borderColor: 'rgba(76, 175, 80, 0.3)'
+            }}>
+              <Text style={{ color: '#4caf50', fontWeight: '800', fontSize: moderateScale(12) }}>✓ ÖDÜL KATLANDI</Text>
+            </View>
           )}
 
           {/* CAN KURTARMA BUTONU (Sadece Kaybedince ve survival/climb gibi modlarda) */}
           {!isWin && onRecoverLife && !isLifeRecovered && (
-             <Pressable
+            <Pressable
               onPress={handleRecoverLife}
               disabled={isRecoverLoading}
               style={({ pressed }) => ({

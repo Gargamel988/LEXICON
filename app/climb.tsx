@@ -2,9 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View, Alert } from 'react-native';
-import Toast from 'react-native-toast-message';
+import { Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 
 import GameHeader from '@/components/Game/GameHeader';
 import PowerUpToolbar from '@/components/Game/PowerUpToolbar';
@@ -96,7 +96,7 @@ export default function ClimbGameScreen() {
         else if (key === 'extra') result = handleExtraAttempt();
         else if (key === 'skip') result = handleSkip();
         if (result !== false && result !== undefined && user) {
-            inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+            inventoryService.usePowerUp(user.id, key as any).catch(() => { });
         }
         return result;
     });
@@ -128,6 +128,14 @@ export default function ClimbGameScreen() {
             }
             queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
         },
+        onError: (err) => {
+            console.error("[CLIMB] Error saving result:", err);
+            Toast.show({
+                type: 'error',
+                text1: 'Hata',
+                text2: 'Oyun sonucu kaydedilemedi.'
+            });
+        }
     });
 
     const startNextWord = useCallback((overrideCategory?: string, nextRound?: number) => {
@@ -161,7 +169,7 @@ export default function ClimbGameScreen() {
         if (user) {
             // Elmas ödülü — en az 1 tur geçildiyse
             if (currentRoundRef.current > 1 && isSessionFairPlay) {
-                inventoryService.giveWinReward(user.id, 'climb').catch(() => {});
+                inventoryService.giveWinReward(user.id, 'climb').catch(() => { });
             }
             saveResultMutation.mutate({
                 mode: 'climb',
@@ -492,8 +500,8 @@ export default function ClimbGameScreen() {
                 isFairPlay={isSessionFairPlay}
                 backgroundStats={sessionBackgroundStats}
                 onRecoverLife={() => {
-                  setIsGameOver(false);
-                  startTimer(15); // Ek süre vererek devam et
+                    setIsGameOver(false);
+                    startTimer(15); // Ek süre vererek devam et
                 }}
                 onRestart={resetTimedGame}
                 onHome={() => router.replace('/')}

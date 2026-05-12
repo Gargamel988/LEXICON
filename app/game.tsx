@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { View, Alert } from 'react-native';
+import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import GameHeader from '../components/Game/GameHeader';
 import PowerUpToolbar from '../components/Game/PowerUpToolbar';
@@ -66,6 +66,14 @@ export default function GameScreen() {
 
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['userCards', user?.id] });
+    },
+    onError: (err) => {
+      console.error("[CLASSIC] Error saving result:", err);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Oyun sonucu kaydedilemedi.'
+      });
     }
   });
 

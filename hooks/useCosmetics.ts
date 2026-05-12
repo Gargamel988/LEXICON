@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FREE_FRAME_ID, FRAMES, FrameDef } from "../constants/frames";
 import { TITLES, Title } from "../constants/titles";
 import { supabase } from "../lib/supabase";
+import { networkService } from "../services/networkService";
 
 const QUERY_OWNED = (userId: string) => ["cosmetics_owned", userId];
 const QUERY_ACTIVE = (userId: string) => ["cosmetics_active", userId];
@@ -62,6 +63,11 @@ async function purchaseAssetWithCoins(
   type: 'frame' | 'nametag' | 'title',
   coinPrice: number,
 ): Promise<void> {
+  // 0. İnternet kontrolü
+  if (!networkService.isOnline) {
+    throw new Error("Satın alma işlemleri için internet bağlantısı gereklidir.");
+  }
+
   // 1. Elmas bakiyesini kontrol et
   const { data: profile, error: profileErr } = await supabase
     .from("profiles")
@@ -101,18 +107,21 @@ export function useCosmetics(userId: string | undefined) {
     queryKey: QUERY_OWNED(userId ?? ""),
     queryFn: () => fetchOwnedAssets(userId!, 'frame'),
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   const activeQuery = useQuery({
     queryKey: QUERY_ACTIVE(userId ?? ""),
     queryFn: () => fetchActiveCosmetics(userId!),
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
   });
 
   const titleQuery = useQuery({
     queryKey: ["titles_owned", userId ?? ""],
     queryFn: () => fetchOwnedAssets(userId!, 'title'),
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
   });
 
   const setActiveMutation = useMutation({

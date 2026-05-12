@@ -7,8 +7,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Text,
-  View,
-  Alert
+  View
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import Animated, {
@@ -138,6 +137,14 @@ export default function BlindMode() {
       }
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    },
+    onError: (err) => {
+      console.error("[BLIND] Error saving result:", err);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Oyun sonucu kaydedilemedi.'
+      });
     }
   });
 

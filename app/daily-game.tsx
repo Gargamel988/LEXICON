@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View, Alert } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 
 import GameHeader from '../components/Game/GameHeader';
@@ -87,6 +87,11 @@ export default function DailyGameScreen() {
         }
       } catch (e) {
         console.error('Lexicon: Submit error', e);
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: 'Oyun sonucu kaydedilemedi.'
+        });
       }
     },
     onFail: async (attempts: number, fairPlayData: { isFairPlay: boolean, backgroundCount: number, backgroundTotalTime: number }) => {
@@ -124,6 +129,11 @@ export default function DailyGameScreen() {
         }
       } catch (e) {
         console.error('Lexicon: Submit error', e);
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: 'Oyun sonucu kaydedilemedi.'
+        });
       }
     },
     // Kelime yüklendiğinde ve sonuç gösterilmemişken arka plan izle

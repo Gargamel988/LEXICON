@@ -2,6 +2,7 @@ import * as IAP from 'expo-iap';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { inventoryService } from './inventoryService';
+import { networkService } from './networkService';
 
 // Google Play Console Product IDs
 export const IAP_SKUS = [
@@ -65,6 +66,9 @@ class IAPService {
    */
   async purchaseProduct(productId: string, userId: string): Promise<IAPResult> {
     try {
+      if (!networkService.isOnline) {
+        return { success: false, error: 'İnternet bağlantısı olmadan satın alma yapılamaz.' };
+      }
       await this.init();
 
       const result = await IAP.requestPurchase({

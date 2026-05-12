@@ -112,6 +112,16 @@ export const PlayerStatsModal = ({
             <View style={{ height: verticalScale(200), justifyContent: 'center' }}>
               <ActivityIndicator color={Colors.accent} size="large" />
             </View>
+          ) : stats?.isPublic === false ? (
+            <View style={{ height: verticalScale(200), justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 20, borderRadius: 20, marginBottom: 16 }}>
+                <Ionicons name="lock-closed" size={40} color="rgba(255,255,255,0.2)" />
+              </View>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 8 }}>Gizli Profil</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: 12, lineHeight: 18 }}>
+                Bu oyuncu profil bilgilerini gizlemeyi tercih etti.
+              </Text>
+            </View>
           ) : stats ? (
             <View style={{ gap: 16, marginBottom: 24 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>

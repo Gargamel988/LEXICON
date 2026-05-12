@@ -34,8 +34,10 @@ interface EditProfileModalProps {
   userId: string;
   currentName: string;
   currentAvatar: string;
-  onSave: (name: string, avatar: string) => void;
+  onSave: (name: string, avatar: string, isPublic: boolean, showOnLeaderboard: boolean) => void;
   isLoading: boolean;
+  isPublicInitial: boolean;
+  showOnLeaderboardInitial: boolean;
   activeFrame?: FrameDef | null;
   activeTitle?: Title | null;
   activeNameTag?: string | null;
@@ -54,6 +56,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   currentAvatar,
   onSave,
   isLoading: isParentLoading,
+  isPublicInitial,
+  showOnLeaderboardInitial,
   activeFrame,
   activeTitle,
   activeNameTag,
@@ -65,6 +69,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 }) => {
   const [name, setName] = useState(currentName);
   const [selectedAvatar, setSelectedAvatar] = useState(currentAvatar);
+  const [isPublic, setIsPublic] = useState(isPublicInitial);
+  const [showOnLeaderboard, setShowOnLeaderboard] = useState(showOnLeaderboardInitial);
   const [isUploading, setIsUploading] = useState(false);
   const { scale, moderateScale, verticalScale } = useResponsive();
 
@@ -123,7 +129,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
   const handleSave = () => {
     if (name.trim().length === 0 || isLoading) return;
-    onSave(name.trim(), selectedAvatar);
+    onSave(name.trim(), selectedAvatar, isPublic, showOnLeaderboard);
   };
 
   return (
@@ -324,6 +330,71 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   );
                 })}
               </ScrollView>
+            </View>
+
+            {/* Privacy Settings */}
+            <View style={{ marginBottom: verticalScale(16), gap: 12 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', marginBottom: 4, letterSpacing: 0.5 }}>GİZLİLİK AYARLARI</Text>
+              
+              {/* Public Profile Toggle */}
+              <TouchableOpacity 
+                onPress={() => setIsPublic(!isPublic)}
+                activeOpacity={0.7}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: isPublic ? Colors.accent + '40' : 'rgba(255,255,255,0.1)'
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Profil Herkese Açık</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>Diğer oyuncular profilinizi görebilir.</Text>
+                </View>
+                <View style={{ 
+                  width: 44, height: 24, borderRadius: 12, 
+                  backgroundColor: isPublic ? Colors.accent : 'rgba(255,255,255,0.1)',
+                  padding: 2,
+                  justifyContent: 'center',
+                  alignItems: isPublic ? 'flex-end' : 'flex-start'
+                }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: isPublic ? '#000' : 'rgba(255,255,255,0.5)' }} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Leaderboard Toggle */}
+              <TouchableOpacity 
+                onPress={() => setShowOnLeaderboard(!showOnLeaderboard)}
+                activeOpacity={0.7}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: showOnLeaderboard ? Colors.accent + '40' : 'rgba(255,255,255,0.1)'
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Sıralamada Göster</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>Skorlarınız liderlik tablosunda yayınlanır.</Text>
+                </View>
+                <View style={{ 
+                  width: 44, height: 24, borderRadius: 12, 
+                  backgroundColor: showOnLeaderboard ? Colors.accent : 'rgba(255,255,255,0.1)',
+                  padding: 2,
+                  justifyContent: 'center',
+                  alignItems: showOnLeaderboard ? 'flex-end' : 'flex-start'
+                }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: showOnLeaderboard ? '#000' : 'rgba(255,255,255,0.5)' }} />
+                </View>
+              </TouchableOpacity>
             </View>
 
             {/* Action Buttons */}

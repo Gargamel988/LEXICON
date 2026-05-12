@@ -1,6 +1,8 @@
-import { TabId } from "@/components/Stats/types";
+import { TabId } from "../components/Stats/types";
 import { supabase } from "../lib/supabase";
 import { levelService } from "./levelService";
+import { localDbService } from "./localDbService";
+import { networkService } from "./networkService";
 
 export interface GameResult {
   mode:
@@ -117,6 +119,7 @@ export interface AggregateStats {
   level: number;
   rank: string;
   xp?: number;
+  isPublic?: boolean;
 }
 
 export interface AchievementStats {
@@ -142,20 +145,53 @@ export const statsService = {
    * Kullanıcının profil bilgilerini getirir
    */
   async getProfile(userId: string) {
+    if (!networkService.isOnline) {
+      const cached = await localDbService.getProfile(userId);
+      if (cached) return cached;
+    }
+
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .maybeSingle();
 
-    if (error) throw error;
-    return data as {
-      id: string;
-      username: string;
-      avatar_url: string;
-      is_premium: boolean;
-      premium_until: string;
+    if (error) {
+      const cached = await localDbService.getProfile(userId);
+      if (cached) return cached;
+      throw error;
+    }
+    // Varsayılan profil taslağı
+    const defaultProfile = {
+      id: userId,
+      username: "",
+      avatar_url: "",
+      coins: 0,
+      xp: 0,
+      level: 1,
+      is_premium: false,
+      premium_until: null,
+      is_public: true,
+      show_on_leaderboard: true,
     };
+
+    // DB verisi ile varsayılanları birleştir
+    const finalizedProfile = {
+      ...defaultProfile,
+      ...(data || {}),
+      // Veri null gelse bile bu alanların undefined olmamasını garanti et
+      is_premium: !!data?.is_premium,
+      is_public: data?.is_public ?? true,
+      show_on_leaderboard: data?.show_on_leaderboard ?? true,
+      coins: data?.coins ?? 0,
+      xp: data?.xp ?? 0,
+      level: data?.level ?? 1,
+    };
+
+    // Update local cache in background - DON'T AWAIT to prevent hanging if DB is locked
+    localDbService.saveProfile(finalizedProfile);
+
+    return finalizedProfile;
   },
 
   /**
@@ -169,33 +205,44 @@ export const statsService = {
       }
 
       // 1. Oyun detayını kaydet
-      const { error: resultError } = await supabase
-        .from("game_results")
-        .insert({
-          user_id: userId,
-          mode: result.mode,
-          is_winner: result.is_winner,
-          attempts: result.attempts,
-          duration_seconds: result.duration_seconds,
-          word_length: result.word_length,
-          category: result.category,
-          score: result.score || 0,
-          solved_count: result.solved_count || 0,
-          word_count: result.word_count || 0,
-          difficulty: result.difficulty,
-          is_fair_play: result.is_fair_play !== false, // Hile durumunu kaydet
-        });
+      if (!networkService.isOnline) {
+        await localDbService.queueGameResult(userId, result);
+        // Local XP ekleme
+        if (result.score && result.score > 0) {
+          const profile = await localDbService.getProfile(userId);
+          if (profile) {
+            const newXp = profile.xp + result.score;
+            // Basit seviye atlama mantığı (levelService içindeki logic'e sadık kalınmalı ama offline'da basitleştirilebilir)
+            await localDbService.saveProfile({ ...profile, xp: newXp });
+          }
+        }
+      } else {
+        const { error: resultError } = await supabase
+          .from("game_results")
+          .insert({
+            user_id: userId,
+            mode: result.mode,
+            is_winner: result.is_winner,
+            attempts: result.attempts,
+            duration_seconds: result.duration_seconds,
+            word_length: result.word_length,
+            category: result.category,
+            score: result.score || 0,
+            solved_count: result.solved_count || 0,
+            word_count: result.word_count || 0,
+            difficulty: result.difficulty,
+            is_fair_play: result.is_fair_play !== false, // Hile durumunu kaydet
+          });
 
-      if (resultError) throw resultError;
-
-      // Hileli oyun kaydedildi (Günlük mod için), ama ödül/seri verilmesin
-      if (result.is_fair_play === false) {
-        return { success: false, reason: "fair_play_violation" };
-      }
-
-      // XP Ekle
-      if (result.score && result.score > 0) {
-        await levelService.addExperience(userId, result.score);
+        if (resultError) {
+          // If insert fails due to connection, queue it
+          await localDbService.queueGameResult(userId, result);
+        } else {
+          // XP Ekle
+          if (result.score && result.score > 0) {
+            await levelService.addExperience(userId, result.score);
+          }
+        }
       }
 
       // Başarımları ve Görevleri kontrol et (Dinamik import)
@@ -600,6 +647,7 @@ export const statsService = {
         bestStreak: 0,
         level: 1,
         rank: "Acemi",
+        isPublic: true,
       };
     }
 
@@ -611,7 +659,7 @@ export const statsService = {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("xp, level")
+      .select("xp, level, is_public")
       .eq("id", userId)
       .single();
 
@@ -633,6 +681,7 @@ export const statsService = {
       level,
       rank,
       xp: currentXp,
+      isPublic: profile?.is_public ?? true,
     };
   },
 
@@ -1406,7 +1455,12 @@ export const statsService = {
    */
   async updateProfile(
     userId: string,
-    data: { username?: string; avatar_url?: string },
+    data: {
+      username?: string;
+      avatar_url?: string;
+      is_public?: boolean;
+      show_on_leaderboard?: boolean;
+    },
   ) {
     try {
       // 2. Profiles Tablosu Güncelle (Upsert)
@@ -1414,6 +1468,8 @@ export const statsService = {
         id: userId,
         username: data.username,
         avatar_url: data.avatar_url,
+        is_public: data.is_public,
+        show_on_leaderboard: data.show_on_leaderboard,
       });
 
       if (profileError) throw profileError;

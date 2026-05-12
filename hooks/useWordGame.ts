@@ -10,8 +10,23 @@ interface UseWordGameProps {
   word: string;
   wordLength: number;
   maxRows?: number;
-  onSuccess?: (points: number, attempts: number, fairPlayData: { isFairPlay: boolean; backgroundCount: number; backgroundTotalTime: number }) => void;
-  onFail?: (attempts: number, fairPlayData: { isFairPlay: boolean; backgroundCount: number; backgroundTotalTime: number }) => void;
+  onSuccess?: (
+    points: number,
+    attempts: number,
+    fairPlayData: {
+      isFairPlay: boolean;
+      backgroundCount: number;
+      backgroundTotalTime: number;
+    },
+  ) => void;
+  onFail?: (
+    attempts: number,
+    fairPlayData: {
+      isFairPlay: boolean;
+      backgroundCount: number;
+      backgroundTotalTime: number;
+    },
+  ) => void;
   onScoreUpdate?: (points: number) => void;
   onRiskExecuted?: () => void;
   onRiskSuccess?: () => void;
@@ -34,7 +49,7 @@ export const useWordGame = ({
   onFairPlayViolation,
   isBlind = false,
   isRadarActive = false,
-  isActive = true,  // Varsayılan true: mevcut modlar değişmeden çalışır
+  isActive = true, // Varsayılan true: mevcut modlar değişmeden çalışır
 }: UseWordGameProps) => {
   const generateRow = useCallback(
     (length: number, index: number) => ({
@@ -638,7 +653,7 @@ export const useWordGame = ({
     isFairPlay,
     backgroundStats: {
       count: backgroundCount,
-      totalTime: backgroundTotalTime
-    }
+      totalTime: backgroundTotalTime,
+    },
   };
 };

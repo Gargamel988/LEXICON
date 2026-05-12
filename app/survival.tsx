@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View, Alert } from 'react-native';
-import Toast from 'react-native-toast-message';
+import { Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 import GameHeader from '../components/Game/GameHeader';
 import PowerUpToolbar from '../components/Game/PowerUpToolbar';
 import Grid from '../components/Grid/Grid';
@@ -12,6 +12,8 @@ import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
+import Colors from '../constants/Colors';
+import { POWER_UP_DEFINITIONS } from '../constants/powerUps';
 import { useAuth } from '../hooks/useAuth';
 import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
@@ -19,10 +21,8 @@ import { useResponsive } from '../hooks/useResponsive';
 import { useWordGame } from '../hooks/useWordGame';
 import { inventoryService } from '../services/inventoryService';
 import { statsService } from '../services/statsService';
-import { POWER_UP_DEFINITIONS, PowerUpKey } from '../constants/powerUps';
 import { getWordByCategory } from '../services/wordService';
 import { toUpperTurkish } from '../utils/stringUtils';
-import Colors from '../constants/Colors';
 
 const SURVIVAL_ACCENT = Colors.modes.survival.accent;
 const SURVIVAL_BG = Colors.modes.survival.background;
@@ -110,6 +110,11 @@ export default function SurvivalScreen() {
     },
     onError: (err) => {
       console.error("[SURVIVAL] Error saving result:", err);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Oyun sonucu kaydedilemedi.'
+      });
     }
   });
 
@@ -130,7 +135,7 @@ export default function SurvivalScreen() {
     if (!user || hasSavedRef.current) return;
     hasSavedRef.current = true;
     if (solvedCount > 0 && isSessionFairPlay) {
-      inventoryService.giveWinReward(user.id, 'survival').catch(() => {});
+      inventoryService.giveWinReward(user.id, 'survival').catch(() => { });
     }
     saveResultMutation.mutate({
       mode: 'survival',
@@ -279,7 +284,7 @@ export default function SurvivalScreen() {
         result = true;
       }
       if (result !== false && result !== undefined && user) {
-        inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+        inventoryService.usePowerUp(user.id, key as any).catch(() => { });
       }
       return result;
     }

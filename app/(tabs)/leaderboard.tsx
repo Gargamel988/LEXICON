@@ -14,6 +14,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useBulkActiveCosmetics } from '../../hooks/useCosmetics';
 import { useResponsive } from '../../hooks/useResponsive';
 import { statsService } from '../../services/statsService';
+import { OfflineBanner } from '../../components/Common/OfflineBanner';
 
 interface SelectedUser {
   id: string;
@@ -206,6 +207,7 @@ export default function LeaderboardScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
+      <OfflineBanner />
       <GestureDetector gesture={swipeGesture}>
         <View style={{ flex: 1, height: '100%', paddingTop: insets.top }}>
           <ModeTabs

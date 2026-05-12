@@ -8,6 +8,9 @@ import { Stack, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { BannerAd } from '@/components/Ads/BannerAd';
+import { OfflineBanner } from '@/components/Common/OfflineBanner';
+import { TitlesSection } from '@/components/Cosmetics/TitlesSection';
 import { EditProfileModal } from '@/components/Profile/EditProfileModal';
 import { ProfileSettingsList } from '@/components/Profile/ProfileSettingsList';
 import { ProfileStatsGrid } from '@/components/Profile/ProfileStatsGrid';
@@ -17,12 +20,11 @@ import { COIN_COLOR, COIN_ICON } from '@/constants/ui';
 import { useCosmetics } from '@/hooks/useCosmetics';
 import { useInventory } from '@/hooks/useInventory';
 import { useProfile } from '@/hooks/useProfile';
+import { networkService } from '@/services/networkService';
 import { renderPowerUpIcon } from '@/utils/renderPowerUpIcon';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
-import { BannerAd } from '@/components/Ads/BannerAd';
-import { TitlesSection } from '@/components/Cosmetics/TitlesSection';
 
 export default function ProfileScreen() {
   const { user, signOutMutation, loading: authLoading } = useAuth();
@@ -32,11 +34,11 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const [isEditModalVisible, setIsEditModalVisible] = React.useState(false);
   const { coins, inventory } = useInventory(user?.id);
-  const { 
-    activeFrame, 
-    activeNameTag, 
-    activeTitle, 
-    ownedTitles, 
+  const {
+    activeFrame,
+    activeNameTag,
+    activeTitle,
+    ownedTitles,
     ownedCosmetics,
     setActiveTitle,
     setActiveFrame,
@@ -58,14 +60,19 @@ export default function ProfileScreen() {
 
   // Profile Update Mutation
   const updateProfileMutation = useMutation({
-    mutationFn: async ({ name, avatar }: { name: string, avatar: string }) => {
+    mutationFn: async ({ name, avatar, isPublic, showOnLeaderboard }: { name: string, avatar: string, isPublic: boolean, showOnLeaderboard: boolean }) => {
       if (!user) throw new Error("Kullanıcı bulunamadı");
+      if (!networkService.isOnline) {
+        throw new Error("Profil güncellemek için internet gerekiyor.");
+      }
       const result = await statsService.updateProfile(user.id, {
         username: name,
-        avatar_url: avatar
+        avatar_url: avatar,
+        is_public: isPublic,
+        show_on_leaderboard: showOnLeaderboard
       });
       if (!result.success) throw result.error;
-      return { name, avatar };
+      return { name, avatar, isPublic, showOnLeaderboard };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
@@ -86,10 +93,14 @@ export default function ProfileScreen() {
     }
   });
 
+
   if (authLoading || statsLoading || profileLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={Colors.accent} />
+        <Text style={{ color: '#888', marginTop: 10, fontSize: 10 }}>
+          {authLoading ? 'Auth...' : statsLoading ? 'Stats...' : 'Profile...'}
+        </Text>
       </View>
     );
   }
@@ -98,6 +109,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <OfflineBanner />
       <Stack.Screen options={{ headerShown: false }} />
 
       <LinearGradient
@@ -117,7 +129,13 @@ export default function ProfileScreen() {
           user={user}
           profile={profile}
           level={stats.level}
-          onEdit={() => setIsEditModalVisible(true)}
+          onEdit={() => {
+            if (!networkService.isOnline) {
+              Toast.show({ type: 'info', text1: 'Çevrimdışı Mod', text2: 'Profil düzenlemek için internet gerekiyor.' });
+              return;
+            }
+            setIsEditModalVisible(true);
+          }}
           activeFrame={activeFrame?.id}
           activeNameTag={activeNameTag}
           activeTitleId={activeTitle?.id}
@@ -130,15 +148,17 @@ export default function ProfileScreen() {
         {/* ── Üyelik Durumu ── */}
         {(() => {
           const isPremiumActive = profile?.is_premium && (!profile.premium_until || new Date(profile.premium_until) > new Date());
-          
+
           return (
             <Pressable
-              onPress={() => !isPremiumActive && router.push('/(tabs)/shop' as any)}
+              onPress={() => {
+                !isPremiumActive && router.push('/(tabs)/shop' as any);
+              }}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: isPremiumActive 
+                backgroundColor: isPremiumActive
                   ? (pressed ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.08)')
                   : (pressed ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)'),
                 borderRadius: 20,
@@ -151,20 +171,20 @@ export default function ProfileScreen() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{
-                  width: 40, height: 40, borderRadius: 20, 
+                  width: 40, height: 40, borderRadius: 20,
                   backgroundColor: isPremiumActive ? 'rgba(251,191,36,0.2)' : 'rgba(59,130,246,0.2)',
                   justifyContent: 'center', alignItems: 'center'
                 }}>
-                  <Ionicons 
-                    name={isPremiumActive ? "shield-checkmark" : "shield-outline"} 
-                    size={22} 
-                    color={isPremiumActive ? "#fbbf24" : "#3b82f6"} 
+                  <Ionicons
+                    name={isPremiumActive ? "shield-checkmark" : "shield-outline"}
+                    size={22}
+                    color={isPremiumActive ? "#fbbf24" : "#3b82f6"}
                   />
                 </View>
                 <View>
-                  <Text style={{ 
-                    color: isPremiumActive ? "#fbbf24" : "#3b82f6", 
-                    fontSize: moderateScale(13), 
+                  <Text style={{
+                    color: isPremiumActive ? "#fbbf24" : "#3b82f6",
+                    fontSize: moderateScale(13),
                     fontWeight: '900',
                     letterSpacing: 0.5
                   }}>
@@ -184,7 +204,9 @@ export default function ProfileScreen() {
 
         {/* ── Elmas Bakiyesi ── */}
         <Pressable
-          onPress={() => router.push('/(tabs)/shop' as any)}
+          onPress={() => {
+            router.push('/(tabs)/shop' as any);
+          }}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -287,6 +309,27 @@ export default function ProfileScreen() {
         </View>
 
         <ProfileSettingsList onLogout={() => signOutMutation.mutate()} />
+
+        {/* ── Debug Bilgileri (Sadece Geliştirme Modunda) ── */}
+        {__DEV__ && (
+          <View style={{
+            marginTop: moderateScale(20),
+            padding: moderateScale(15),
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            borderRadius: 15,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.05)',
+            marginBottom: moderateScale(40)
+          }}>
+            <Text style={{ color: Colors.accent, fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 8 }}>DEVELOPER DEBUG</Text>
+            <View style={{ gap: 4 }}>
+              <Text style={{ color: '#888', fontSize: 11 }}>User ID: <Text style={{ color: '#ccc' }}>{user?.id}</Text></Text>
+              <Text style={{ color: '#888', fontSize: 11 }}>Public: <Text style={{ color: profile?.is_public ? '#4cd964' : '#ff3b30' }}>{String(profile?.is_public)}</Text></Text>
+              <Text style={{ color: '#888', fontSize: 11 }}>Leaderboard: <Text style={{ color: profile?.show_on_leaderboard ? '#4cd964' : '#ff3b30' }}>{String(profile?.show_on_leaderboard)}</Text></Text>
+              <Text style={{ color: '#888', fontSize: 11 }}>Online: <Text style={{ color: networkService.isOnline ? '#4cd964' : '#ff3b30' }}>{String(networkService.isOnline)}</Text></Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       <EditProfileModal
@@ -295,7 +338,11 @@ export default function ProfileScreen() {
         userId={user?.id || ""}
         currentName={profile?.username || user?.user_metadata?.full_name || user?.email?.split('@')[0] || ""}
         currentAvatar={profile?.avatar_url || user?.user_metadata?.avatar_url || ""}
-        onSave={(name: string, avatar: string) => updateProfileMutation.mutate({ name, avatar })}
+        isPublicInitial={profile?.is_public ?? true}
+        showOnLeaderboardInitial={profile?.show_on_leaderboard ?? true}
+        onSave={(name: string, avatar: string, isPublic: boolean, showOnLeaderboard: boolean) =>
+          updateProfileMutation.mutate({ name, avatar, isPublic, showOnLeaderboard })
+        }
         isLoading={updateProfileMutation.isPending}
         activeFrame={activeFrame}
         activeTitle={activeTitle}

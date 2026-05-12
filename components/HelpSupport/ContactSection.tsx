@@ -9,6 +9,8 @@ import React from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
 
+import Toast from 'react-native-toast-message';
+
 const SUPPORT_EMAIL = 'omeraydin1.web@gmail.com';
 const DEVELOPER_URL = 'https://hatayyazilim.com/contact';
 
@@ -61,7 +63,11 @@ export const ContactSection = () => {
 
   const handleEmail = () => {
     Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=LEXİCON%20Destek`).catch(() => {
-      Alert.alert('Hata', 'E-posta uygulaması açılamadı.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'E-posta uygulaması açılamadı.'
+      });
     });
   };
 

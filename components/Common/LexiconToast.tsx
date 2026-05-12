@@ -1,48 +1,138 @@
-import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Platform, Text, View } from 'react-native';
-import { ToastConfig } from 'react-native-toast-message';
-import Colors from '../../constants/Colors';
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import React from "react";
+import { Platform, Text, View } from "react-native";
+import { ToastConfig } from "react-native-toast-message";
+import Colors from "../../constants/Colors";
+import { useResponsive } from "../../hooks/useResponsive";
 
 /**
- * Custom Lexicon Design System Toast Configuration
- * Matches the obsidian/dark aesthetic of the word hunt game.
+ * Toast Component Wrapper to use hooks
  */
-export const lexiconToastConfig: ToastConfig = {
-  success: (props) => (
-    <View style={[{ height: 'auto', width: '90%', backgroundColor: '#1a1a1a', borderRadius: 16, flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1.5, marginTop: Platform.OS === 'ios' ? 10 : 0, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 }, { borderColor: Colors.correct.main }]}>
-      <View style={[{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12 }, { backgroundColor: `${Colors.correct.main}20` }]}>
-        <Ionicons name="checkmark-circle" size={24} color={Colors.correct.main} />
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2 }}>{props.text1}</Text>
-        {props.text2 && <Text style={{ color: '#888780', fontSize: 13, fontWeight: '500', lineHeight: 18 }}>{props.text2}</Text>}
-      </View>
-    </View>
-  ),
+const LexiconToast = ({ type, text1, text2 }: { type: 'success' | 'error' | 'info', text1?: string, text2?: string }) => {
+  const { moderateScale, scale, width } = useResponsive();
+  
+  const getConfig = () => {
+    switch (type) {
+      case 'success':
+        return {
+          color: Colors.correct.main,
+          icon: 'checkmark-circle' as const,
+          bgColor: [`${Colors.correct.main}30`, `${Colors.correct.main}10`],
+          glowColor: Colors.correct.main
+        };
+      case 'error':
+        return {
+          color: Colors.danger,
+          icon: 'alert-circle' as const,
+          bgColor: [`${Colors.danger}30`, `${Colors.danger}10`],
+          glowColor: Colors.danger
+        };
+      case 'info':
+      default:
+        return {
+          color: Colors.accent,
+          icon: 'information-circle' as const,
+          bgColor: [`${Colors.accent}30`, `${Colors.accent}10`],
+          glowColor: Colors.accent
+        };
+    }
+  };
 
-  error: (props) => (
-    <View style={[{ height: 'auto', width: '90%', backgroundColor: '#1a1a1a', borderRadius: 16, flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1.5, marginTop: Platform.OS === 'ios' ? 10 : 0, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 }, { borderColor: Colors.danger }]}>
-      <View style={[{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12 }, { backgroundColor: `${Colors.danger}20` }]}>
-        <Ionicons name="alert-circle" size={24} color={Colors.danger} />
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2 }}>{props.text1}</Text>
-        {props.text2 && <Text style={{ color: '#888780', fontSize: 13, fontWeight: '500', lineHeight: 18 }}>{props.text2}</Text>}
-      </View>
-    </View>
-  ),
+  const config = getConfig();
 
-  info: (props) => (
-    <View style={[{ height: 'auto', width: '90%', backgroundColor: '#1a1a1a', borderRadius: 16, flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1.5, marginTop: Platform.OS === 'ios' ? 10 : 0, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 }, { borderColor: Colors.textSecondary }]}>
-      <View style={[{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12 }, { backgroundColor: `${Colors.textSecondary}20` }]}>
-        <Ionicons name="information-circle" size={24} color={Colors.textSecondary} />
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2 }}>{props.text1}</Text>
-        {props.text2 && <Text style={{ color: '#888780', fontSize: 13, fontWeight: '500', lineHeight: 18 }}>{props.text2}</Text>}
-      </View>
+  return (
+    <View style={{
+      width: width * 0.92,
+      shadowColor: config.glowColor,
+      shadowOffset: { width: 0, height: moderateScale(4) },
+      shadowOpacity: 0.4,
+      shadowRadius: moderateScale(12),
+      elevation: 12,
+    }}>
+      <LinearGradient
+        colors={['#1a1a1a', '#0d0d0d']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          borderRadius: moderateScale(20),
+          flexDirection: "row",
+          alignItems: "center",
+          padding: moderateScale(14),
+          borderWidth: 1.5,
+          borderColor: `${config.color}50`,
+          overflow: 'hidden'
+        }}
+      >
+        {/* Animated-like Glow Background Element */}
+        <View style={{
+          position: 'absolute',
+          top: -moderateScale(20),
+          left: -moderateScale(20),
+          width: moderateScale(80),
+          height: moderateScale(80),
+          borderRadius: moderateScale(40),
+          backgroundColor: config.color,
+          opacity: 0.05,
+        }} />
+
+        <LinearGradient
+          colors={config.bgColor as any}
+          style={{
+            width: scale(48),
+            height: scale(48),
+            borderRadius: scale(16),
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: scale(14),
+            borderWidth: 1,
+            borderColor: `${config.color}40`
+          }}
+        >
+          <Ionicons name={config.icon} size={scale(26)} color={config.color} />
+        </LinearGradient>
+
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={{
+            color: '#ffffff',
+            fontSize: moderateScale(16),
+            fontWeight: '900',
+            letterSpacing: 0.3,
+            marginBottom: moderateScale(2)
+          }}>
+            {text1}
+          </Text>
+          {text2 && (
+            <Text 
+              numberOfLines={2}
+              style={{
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: moderateScale(12.5),
+                fontWeight: '600',
+                lineHeight: moderateScale(16)
+              }}
+            >
+              {text2}
+            </Text>
+          )}
+        </View>
+
+        {/* Minimal accent line on the right */}
+        <View style={{
+          width: 4,
+          height: '60%',
+          backgroundColor: config.color,
+          borderRadius: 2,
+          marginLeft: 8,
+          opacity: 0.6
+        }} />
+      </LinearGradient>
     </View>
-  ),
+  );
 };
 
+export const lexiconToastConfig: ToastConfig = {
+  success: (props) => <LexiconToast type="success" text1={props.text1} text2={props.text2} />,
+  error: (props) => <LexiconToast type="error" text1={props.text1} text2={props.text2} />,
+  info: (props) => <LexiconToast type="info" text1={props.text1} text2={props.text2} />,
+};

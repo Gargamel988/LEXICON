@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { statsService } from '../services/statsService';
+import { useQuery } from "@tanstack/react-query";
+import { statsService } from "../services/statsService";
 
 /**
  * Kullanıcının profiles tablosundaki verilerini fetch eden ve cache'leyen hook.
@@ -7,9 +7,17 @@ import { statsService } from '../services/statsService';
  */
 export const useProfile = (userId: string | undefined) => {
   return useQuery({
-    queryKey: ['profile', userId],
-    queryFn: () => statsService.getProfile(userId!),
+    queryKey: ["profile", userId],
+    queryFn: async () => {
+      try {
+        const data = await statsService.getProfile(userId!);
+        return data;
+      } catch (error) {
+        throw error;
+      }
+    },
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // 5 dakika cache
+    staleTime: 5000, // 5 saniye boyunca aynı veriyi kullan, sonsuz döngüyü engelle
+    gcTime: 1000 * 60 * 60,
   });
 };

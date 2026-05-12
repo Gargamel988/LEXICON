@@ -83,8 +83,20 @@ export const achievementService = {
 
         // ─── Toplu Varlık Kaydı ───
         if (assetInserts.length > 0) {
+          const { data: session } = await supabase.auth.getSession();
+          if (!session?.session?.user) {
+             console.warn("Achievement save aborted: No active session");
+             return [];
+          }
+
           const { error } = await supabase.from("user_assets").upsert(assetInserts, { onConflict: 'user_id,asset_type,asset_id' });
-          if (error) console.error("Error saving user assets:", error);
+          if (error) {
+            if (error.code === '42501') {
+              console.warn("RLS Policy Error: Please ensure 'user_assets' table has INSERT/UPDATE policies for authenticated users.");
+            } else {
+              console.error("Error saving user assets:", error);
+            }
+          }
         }
 
         // ─── Power-up ödüllerini kaydet ───

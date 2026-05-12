@@ -11,8 +11,11 @@ import { AppState } from "react-native";
 import Toast from 'react-native-toast-message';
 import { CustomSplashScreen } from "../components/Common/CustomSplashScreen";
 import { lexiconToastConfig } from '../components/Common/LexiconToast';
+import { OfflineWarningModal } from "../components/Common/OfflineWarningModal";
 import Colors from '../constants/Colors';
 import { adService } from "../services/adService";
+import { localDbService } from "../services/localDbService";
+import { networkService } from "../services/networkService";
 import { statsService } from '../services/statsService';
 
 const queryClient = new QueryClient();
@@ -38,6 +41,7 @@ function parseSupabaseUrl(url: string) {
 function RootContent() {
   const { loading, user } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
   const router = useRouter();
   const url = Linking.useURL();
 
@@ -79,6 +83,21 @@ function RootContent() {
     if (!loading) {
       // Native splash'i gizle, kendi animasyonlu splash'imizi gösteriyoruz
       SplashScreen.hideAsync().catch(() => { });
+
+      // Başlangıç kontrolü
+      networkService.checkConnection().then(isOnline => {
+        if (!isOnline) setShowOfflineModal(true);
+      });
+
+      // Canlı dinleyici: İnternet kesildiği anda modalı aç
+      const handleNetworkChange = (isOnline: boolean) => {
+        if (!isOnline) {
+          setShowOfflineModal(true);
+        }
+      };
+
+      networkService.addListener(handleNetworkChange);
+      return () => networkService.removeListener(handleNetworkChange);
     }
   }, [loading]);
 
@@ -97,14 +116,22 @@ function RootContent() {
           contentStyle: { backgroundColor: Colors.background },
         }}
       />
+      <OfflineWarningModal
+        visible={showOfflineModal}
+        onClose={() => setShowOfflineModal(false)}
+      />
     </>
   );
 }
 
 export default function RootLayout() {
   useEffect(() => {
+    // Servisleri başlat
+    localDbService.init();
+    networkService.init();
+
     // Kök arka plan rengini ayarla
-    SystemUI.setBackgroundColorAsync(Colors.background);
+    SystemUI.setBackgroundColorAsync(Colors.background).catch(() => { });
 
     // Reklam servisini başlat
     adService.init().catch(err => {

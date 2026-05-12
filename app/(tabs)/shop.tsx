@@ -20,6 +20,8 @@ import { PowerUpSection } from '../../components/Shop/PowerUpSection';
 import { UltimateBundle } from '../../components/Shop/UltimateBundle';
 import { AD_UNIT_IDS } from '../../constants/ads';
 import Colors from '../../constants/Colors';
+import { OfflineBanner } from '../../components/Common/OfflineBanner';
+import { networkService } from '../../services/networkService';
 import { POWER_UP_DEFINITIONS, PowerUpKey } from '../../constants/powerUps';
 import { COIN_COLOR, COIN_ICON } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
@@ -87,6 +89,10 @@ export default function ShopScreen() {
 
   const handleBuyIAP = async (product: string | { id: string }) => {
     if (!user?.id) return;
+    if (!networkService.isOnline) {
+      Toast.show({ type: 'info', text1: 'Çevrimdışı Mod', text2: 'Satın alma işlemi için internet gerekiyor.', position: 'top' });
+      return;
+    }
     const productId = typeof product === 'string' ? product : product.id;
 
     setIsPurchasingId(productId);
@@ -137,6 +143,10 @@ export default function ShopScreen() {
   };
 
   const handleWatchAd = () => {
+    if (!networkService.isOnline) {
+      Toast.show({ type: 'info', text1: 'Çevrimdışı Mod', text2: 'Reklam izlemek için internet gerekiyor.', position: 'top' });
+      return;
+    }
     setIsAdLoading(true);
     adService.showRewardedAd(
       AD_UNIT_IDS.REWARDED_DAILY,
@@ -156,6 +166,7 @@ export default function ShopScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <OfflineBanner />
       {/* ── HEADER ── */}
       <View style={{
         paddingTop: insets.top + 10,

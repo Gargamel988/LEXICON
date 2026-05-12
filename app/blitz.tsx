@@ -1,9 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Alert } from 'react-native';
-import Toast from 'react-native-toast-message';
+import { View } from 'react-native';
 import Animated, { Easing, FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import GameHeader from '../components/Game/GameHeader';
@@ -13,6 +13,7 @@ import Keyboard from '../components/Keyboard/Keyboard';
 import GameLayout from '../components/Layout/GameLayout';
 import ResultModal from '../components/modal/ResultModal';
 import SettingsModal from '../components/modal/SettingsModal';
+import Colors from '../constants/Colors';
 import { useAuth } from '../hooks/useAuth';
 import { useInventory } from '../hooks/useInventory';
 import { usePowerUps } from '../hooks/usePowerUps';
@@ -21,7 +22,6 @@ import { useWordGame } from '../hooks/useWordGame';
 import { inventoryService } from '../services/inventoryService';
 import { statsService } from '../services/statsService';
 import { getWordByCategory } from '../services/wordService';
-import Colors from '../constants/Colors';
 
 const GAME_TIME = 180;
 const BLITZ_ACCENT = Colors.modes.blitz.accent;
@@ -65,7 +65,7 @@ export default function TimedGameScreen() {
         else if (key === 'lightning') result = handleLightning();
         else if (key === 'risk') { setIsRiskModeActive(!isRiskModeActive); result = 'toggle'; }
         if (result !== false && result !== undefined && user) {
-            inventoryService.usePowerUp(user.id, key as any).catch(() => {});
+            inventoryService.usePowerUp(user.id, key as any).catch(() => { });
         }
         return result;
     });
@@ -108,7 +108,7 @@ export default function TimedGameScreen() {
 
         if (user) {
             if (solvedCountRef.current > 0 && isSessionFairPlay) {
-                inventoryService.giveWinReward(user.id, 'blitz').catch(() => {});
+                inventoryService.giveWinReward(user.id, 'blitz').catch(() => { });
             }
             saveResultMutation.mutate({
                 mode: 'blitz',
@@ -284,6 +284,14 @@ export default function TimedGameScreen() {
             }
             queryClient.invalidateQueries({ queryKey: ['stats', user?.id] });
         },
+        onError: (err) => {
+            console.error("[BLITZ] Error saving result:", err);
+            Toast.show({
+                type: 'error',
+                text1: 'Hata',
+                text2: 'Oyun sonucu kaydedilemedi.'
+            });
+        }
     });
 
     const handleStartGame = (category: string) => {

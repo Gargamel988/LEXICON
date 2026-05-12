@@ -24,6 +24,7 @@ export const NameTagsSection = ({ userId, coins, username }: Props) => {
     setActiveNameTag,
     isSettingActive,
     buyCosmetic,
+    buyNameTag,
     isBuying,
   } = useCosmetics(userId);
 
@@ -72,7 +73,7 @@ export const NameTagsSection = ({ userId, coins, username }: Props) => {
             onPress: async () => {
               setBuyingId(item.id);
               try {
-                await buyCosmetic(item.id, item.coinPrice!);
+                await buyNameTag(item.id, item.coinPrice!);
                 Toast.show({
                   type: 'success',
                   text1: `${item.name} kazanıldı! 🎉`,

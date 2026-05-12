@@ -46,18 +46,6 @@ export default function BombGameScreen() {
     leaveRoom,
   } = useBombGame(roomCode);
 
-  // DEBUG LOGS
-  useEffect(() => {
-    console.log("[BOMB STATUS]", {
-      isRoomLoaded: !!room,
-      isUserLoaded: !!user,
-      roomStatus: room?.status,
-      bombHolder: room?.bomb_holder_id,
-      myUserId: user?.id,
-      isMyTurn: isMyTurn,
-      playerCount: players.length
-    });
-  }, [room?.bomb_holder_id, user?.id, isMyTurn, room?.status, players.length]);
 
   const lottieRef = useRef<any>(null);
   const bombScale = useSharedValue(1);
